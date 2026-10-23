@@ -1,0 +1,52 @@
+export const YUTARA_SERVICE_AREA = {
+  city: "Panabo City",
+  province: "Davao del Norte",
+  region: "Davao Region",
+  country: "Philippines",
+} as const;
+
+// Centralized Panabo City barangay configuration for the focused launch area.
+export const PANABO_BARANGAYS = [
+  "A.O. Floirendo",
+  "Buenavista",
+  "Cacao",
+  "Cagangohan",
+  "Consolacion",
+  "Datu Abdul Dadia",
+  "Gredu",
+  "J.P. Laurel",
+  "Kasilak",
+  "Katipunan",
+  "Katualan",
+  "Kauswagan",
+  "Kiotoy",
+  "Little Panay",
+  "Lower Panaga",
+  "Mabuhay",
+  "Magsaysay",
+  "Malativas",
+  "Manay",
+  "New Malaga",
+  "New Malitbog",
+  "New Pandan",
+  "Nanyo",
+  "Pandapan",
+  "Poblacion",
+  "Salvacion",
+  "San Francisco",
+  "San Nicolas",
+  "San Pedro",
+  "San Roque",
+  "San Vicente",
+  "Santa Cruz",
+  "Santo Niño",
+  "Sindaton",
+  "Southern Davao",
+  "Tagpore",
+  "Tibungol",
+  "Upper Limon",
+  "Waterfall",
+] as const;
+
+export const isWithinServiceArea = (city: string, province: string) =>
+  city === YUTARA_SERVICE_AREA.city && province === YUTARA_SERVICE_AREA.province;
