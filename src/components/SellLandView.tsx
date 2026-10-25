@@ -510,7 +510,8 @@ export function SellLandView({
               <div
                 className="form-grid"
                 style={{
-                  gridTemplateColumns: "1fr 1fr",
+                  gridTemplateColumns:
+                    "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
                   display: step === 1 ? "grid" : "none",
                 }}
               >
@@ -632,7 +633,10 @@ export function SellLandView({
               {step === 2 && (
                 <div
                   className="form-grid"
-                  style={{ gridTemplateColumns: "1fr 1fr" }}
+                  style={{
+                    gridTemplateColumns:
+                      "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
+                  }}
                 >
                   <label>
                     Registered owner name

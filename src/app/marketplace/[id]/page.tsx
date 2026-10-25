@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, Check, Heart, MapPin, MessageCircle, ShieldCheck } from "lucide-react";
 import { AppNav } from "@/components/AppNav";
 import { Modal } from "@/components/Modal";
 import {
   formatMoney,
   isActiveListing,
+  Property,
   roadAccessLabel,
 } from "@/lib/marketplace";
 import { readProperties } from "@/lib/property-store";
@@ -29,19 +30,26 @@ function readSaved(): number[] {
 export default function PropertyRoute() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const property = useMemo(
-    () => readProperties().find((item) => item.id === Number(params.id)),
-    [params.id],
-  );
-  const [session] = useState<DemoUser | null>(() => getStoredSession());
-  const [saved, setSaved] = useState<boolean>(() =>
-    property ? readSaved().includes(property.id) : false,
-  );
+  const [property, setProperty] = useState<Property | undefined>(undefined);
+  const [session, setSession] = useState<DemoUser | null>(null);
+  const [saved, setSaved] = useState(false);
   const [inquiryOpen, setInquiryOpen] = useState(false);
   const [message, setMessage] = useState(
     "Hello, I am interested in this property and would like to know more about its availability.",
   );
   const [sent, setSent] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const found = readProperties().find(
+        (item) => item.id === Number(params.id),
+      );
+      setProperty(found);
+      setSession(getStoredSession());
+      setSaved(found ? readSaved().includes(found.id) : false);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [params.id]);
 
   if (!property) {
     return (

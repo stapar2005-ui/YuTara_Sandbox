@@ -7,14 +7,16 @@
   --forest-soft: #dfece4;
   --gold: #d79c43;
   --cream: #f3ede1;
-  --muted: #6e7a72;
+  --muted: #5f6b63;
   --line: #dfe5dd;
+  --sans: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial,
+    sans-serif;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: "DM Sans", Arial, sans-serif;
+  --font-sans: var(--sans);
 }
 
 * {
@@ -23,13 +25,29 @@
 
 html {
   scroll-behavior: smooth;
+  font-size: 17px;
 }
 
 body {
   margin: 0;
   background: var(--background);
   color: var(--foreground);
-  font-family: "DM Sans", Arial, sans-serif;
+  font-family: var(--sans);
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+/* Descriptions and prose: sans-serif, slightly larger, comfortable to read. */
+p,
+li,
+dd,
+dt,
+figcaption {
+  font-family: var(--sans);
+}
+p {
+  font-size: 1.05rem;
+  line-height: 1.65;
 }
 
 button,
@@ -64,10 +82,11 @@ button {
 
 .app-shell {
   min-height: 100vh;
-  overflow-x: hidden;
+  /* clip (not hidden) so the sticky header keeps working */
+  overflow-x: clip;
 }
 .container {
-  width: min(1180px, calc(100% - 40px));
+  width: min(1260px, calc(100% - 32px));
   margin: 0 auto;
 }
 .display {
@@ -95,6 +114,10 @@ button {
   top: 0;
   z-index: 20;
   backdrop-filter: blur(16px);
+  transition: transform 0.28s ease;
+}
+.topbar-hidden {
+  transform: translateY(-101%);
 }
 .nav {
   display: flex;
@@ -1015,7 +1038,7 @@ button {
   margin-bottom: 24px;
 }
 .featured-carousel {
-  min-height: 480px;
+  min-height: 520px;
   position: relative;
   outline: none;
   touch-action: pan-y;
@@ -1025,7 +1048,7 @@ button {
   cursor: grabbing;
 }
 .featured-card {
-  height: clamp(480px, 36vw, 520px);
+  height: clamp(520px, 40vw, 600px);
   min-height: 0;
   position: relative;
   overflow: hidden;
@@ -3145,4 +3168,104 @@ button {
 }
 .verify-docs h4 {
   margin: 12px 0 6px;
+}
+
+/* Search inside the side panel */
+.filter-panel .search-box {
+  min-width: 0;
+  width: 100%;
+  height: 44px;
+}
+.side-search {
+  min-width: 0;
+}
+
+/* Promotion controls on dashboard cards */
+.promo-box {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  justify-items: start;
+}
+
+/* ------------------------------------------------------------------ */
+/* Mobile refinements: prevent compressed / overflowing layouts        */
+/* ------------------------------------------------------------------ */
+@media (max-width: 700px) {
+  .detail-actions,
+  .map-preview-actions,
+  .hero-actions,
+  .inquiry-actions,
+  .tx-card-actions,
+  .admin-actions,
+  .verify-doc-actions,
+  .verify-decision-actions,
+  .modal-foot {
+    flex-wrap: wrap;
+  }
+  .seller-tabs {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .seller-tabs button {
+    padding: 10px 10px;
+    font-size: 0.8rem;
+  }
+  .modal {
+    padding: 18px;
+  }
+  .market-header {
+    margin: 18px 0;
+  }
+  .workspace,
+  .detail-view,
+  .marketplace,
+  .map-page {
+    padding-top: 34px;
+  }
+  .section {
+    padding: 52px 0;
+  }
+  .review-row {
+    flex-wrap: wrap;
+    gap: 4px 12px;
+  }
+  .results-top {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 560px) {
+  .hero {
+    min-height: 460px;
+    padding: 54px 0 66px;
+  }
+  .hero h1 {
+    font-size: clamp(2.6rem, 12vw, 3.6rem);
+  }
+  .nav-links {
+    flex-wrap: wrap;
+  }
+  .market-header h1 {
+    font-size: clamp(2rem, 9vw, 3rem);
+  }
+  .search-box {
+    min-width: 0;
+  }
+  .featured-content h3 {
+    font-size: 1.8rem;
+  }
+  .detail-specs {
+    grid-template-columns: 1fr 1fr;
+  }
+  .modal h2 {
+    font-size: 1.4rem;
+  }
+  .tx-facts {
+    grid-template-columns: 1fr;
+  }
+  .container {
+    width: min(100% - 26px, 1260px);
+  }
 }

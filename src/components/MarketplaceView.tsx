@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Filter, Search } from "lucide-react";
-import { getListingStatus, Property } from "@/lib/marketplace";
+import { getListingStatus, isPromotionActive, Property } from "@/lib/marketplace";
 import { PANABO_BARANGAYS } from "@/lib/yutara-config";
 import { PropertyCard } from "./PropertyCard";
 import { PromotedCarousel } from "./PromotedCarousel";
@@ -94,25 +94,28 @@ export function MarketplaceView({
               <br />
               land marketplace.
             </h1>
-            <p className="muted">
-              Discover verified properties available across Panabo City.
-            </p>
+              <p className="muted">
+                Discover verified properties available across Panabo City.
+              </p>
+            </div>
           </div>
-          <div className="search-box">
-            <Search size={18} color="#6e7a72" />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search property, barangay, type..."
-            />
-          </div>
-        </div>
         <div className="market-layout">
           <aside
             id="marketplace-filters"
             className={`filter-panel ${filtersOpen ? "open" : ""}`}
           >
             <h3>Refine search</h3>
+            <div className="filter-group">
+              <label>Search</label>
+              <div className="search-box side-search">
+                <Search size={18} color="#6e7a72" />
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search property, barangay, type..."
+                />
+              </div>
+            </div>
             <div className="filter-group">
               <label>Quick actions</label>
               <div style={{ display: "grid", gap: 8 }}>
@@ -122,12 +125,6 @@ export function MarketplaceView({
                 >
                   Sell land
                 </button>
-                <Link
-                  className="button button-ghost full-button"
-                  href="/marketplace/map"
-                >
-                  Map view
-                </Link>
                 <Link
                   className="button button-ghost full-button"
                   href="/dashboard"
@@ -210,12 +207,13 @@ export function MarketplaceView({
               aria-controls="marketplace-filters"
               onClick={() => setFiltersOpen((open) => !open)}
             >
-              <Filter size={15} /> {filtersOpen ? "Hide filters" : "Filters"}
+              <Filter size={15} />{" "}
+              {filtersOpen ? "Hide refine search" : "Refine search"}
             </button>
             <section className="market-promoted-section">
               <div className="market-section-heading">
                 <div>
-                  <div className="eyebrow">Highlighted / Promoted Lands</div>
+                  <div className="eyebrow">YuTara Promoted</div>
                   <h2 className="display">YuTara Promoted</h2>
                 </div>
                 <p>
@@ -226,8 +224,9 @@ export function MarketplaceView({
               <PromotedCarousel
                 properties={filtered.filter(
                   (property) =>
-                    property.promoted &&
-                    (property.status === "PUBLISHED" || property.verificationStatus === "VERIFIED") &&
+                    isPromotionActive(property) &&
+                    (property.status === "PUBLISHED" ||
+                      property.verificationStatus === "VERIFIED") &&
                     getListingStatus(property) === "OPEN_FOR_OFFERS",
                 )}
                 saved={saved}

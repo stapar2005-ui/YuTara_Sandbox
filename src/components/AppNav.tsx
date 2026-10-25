@@ -6,12 +6,15 @@ import { useEffect, useState } from "react";
 import { Bell } from "lucide-react";
 import { YuTaraLogo } from "./YuTaraLogo";
 import { clearStoredSession, DemoUser } from "@/lib/demo-auth";
+import { setStoredTheme } from "@/lib/theme";
 import { notificationsFor } from "@/lib/notifications";
 import { readProperties } from "@/lib/property-store";
+import { useAutoHideHeader } from "@/lib/use-auto-hide-header";
 
 export function AppNav({ session }: { session: DemoUser | null }) {
   const router = useRouter();
   const [count, setCount] = useState(0);
+  const headerHidden = useAutoHideHeader();
 
   useEffect(() => {
     const sync = () =>
@@ -26,10 +29,13 @@ export function AppNav({ session }: { session: DemoUser | null }) {
 
   function logout() {
     clearStoredSession();
+    // Theme is a personal preference: reset to light so it never leaks to the
+    // next person who signs in on this device.
+    setStoredTheme("light");
     router.replace("/");
   }
   return (
-    <header className="topbar">
+    <header className={`topbar ${headerHidden ? "topbar-hidden" : ""}`}>
       <div className="container nav">
         <Link className="brand" href="/">
           <YuTaraLogo priority />

@@ -7,6 +7,7 @@ import {
   Bookmark,
   Check,
   MapPin,
+  Megaphone,
   ShieldCheck,
   Store,
 } from "lucide-react";
@@ -15,10 +16,22 @@ import { AppNav } from "@/components/AppNav";
 import { BuyerTransactions } from "@/components/BuyerTransactions";
 import { SellerTransactions } from "@/components/SellerTransactions";
 import { DocumentVault } from "@/components/DocumentVault";
+import { Modal } from "@/components/Modal";
 import { DemoUser, getStoredSession } from "@/lib/demo-auth";
-import { formatMoney } from "@/lib/marketplace";
-import { readProperties } from "@/lib/property-store";
-import { readTransactions } from "@/lib/transactions";
+import {
+  formatMoney,
+  isActiveListing,
+  isPromotionActive,
+  Property,
+} from "@/lib/marketplace";
+import { readProperties, PROPERTIES_EVENT } from "@/lib/property-store";
+import {
+  endPromotion,
+  PROMO_OPTIONS,
+  promoteLand,
+  promotionEndLabel,
+} from "@/lib/promotions";
+import { readTransactions, Transaction } from "@/lib/transactions";
 import { readReservations, Reservation } from "@/lib/reservation-service";
 
 const LISTING_STATUS_CLASS: Record<string, string> = {
@@ -46,6 +59,10 @@ export default function DashboardPage() {
   const router = useRouter();
   const [session, setSession] = useState<DemoUser | null>(null);
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [promoteId, setPromoteId] = useState<number | null>(null);
+  const [promoteDays, setPromoteDays] = useState(30);
 
   useEffect(() => {
     window.setTimeout(() => {
@@ -59,11 +76,25 @@ export default function DashboardPage() {
     }, 0);
   }, [router]);
 
+  useEffect(() => {
+    const sync = () => {
+      setProperties(readProperties());
+      setTransactions(readTransactions());
+    };
+    const timer = window.setTimeout(sync, 0);
+    window.addEventListener(PROPERTIES_EVENT, sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener(PROPERTIES_EVENT, sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, []);
+
   const owned = reservations.filter(
     (reservation) => reservation.buyerId === session?.email,
   );
-  const properties = readProperties();
-  const transactions = readTransactions();
+
   const myListings = session
     ? properties.filter((property) => property.sellerEmail === session.email)
     : [];
@@ -73,6 +104,13 @@ export default function DashboardPage() {
   const soldIds = new Set(sellerTx.map((tx) => tx.propertyId));
   const onSale = myListings.filter((listing) => !soldIds.has(listing.id));
   const sold = myListings.filter((listing) => soldIds.has(listing.id));
+  const promoteListing =
+    promoteId !== null
+      ? (myListings.find((listing) => listing.id === promoteId) ?? null)
+      : null;
+  const promoOption =
+    PROMO_OPTIONS.find((option) => option.days === promoteDays) ??
+    PROMO_OPTIONS[2];
 
   return (
     <div className="app-shell">
@@ -113,7 +151,7 @@ export default function DashboardPage() {
                 reserved
               </h2>
             </div>
-            <Link className="button button-primary" href="/marketplace/map">
+            <Link className="button button-primary" href="/marketplace">
               Discover land
             </Link>
           </div>
@@ -219,6 +257,41 @@ export default function DashboardPage() {
                         marketplace once approved.
                       </small>
                     )}
+                    {isPromotionActive(listing) ? (
+                      <div className="promo-box">
+                        <span className="badge badge-promoted">
+                          <Megaphone size={12} /> Promoted
+                        </span>
+                        <small className="muted">
+                          Runs until {promotionEndLabel(listing.promotionUntil)}
+                        </small>
+                        <button
+                          className="button button-ghost"
+                          onClick={() => endPromotion(listing.id)}
+                        >
+                          Stop promotion
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="promo-box">
+                        <button
+                          className="button button-primary"
+                          disabled={!isActiveListing(listing)}
+                          onClick={() => {
+                            setPromoteId(listing.id);
+                            setPromoteDays(30);
+                          }}
+                        >
+                          <Megaphone size={14} /> Promote this land
+                        </button>
+                        {!isActiveListing(listing) && (
+                          <small className="muted">
+                            You can promote this land once it is approved and live
+                            on the marketplace.
+                          </small>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </article>
               ))}
@@ -279,6 +352,63 @@ export default function DashboardPage() {
             <div style={{ marginTop: 20 }}>
               <SellerTransactions email={session.email} />
             </div>
+          )}
+
+          {promoteListing && (
+            <Modal
+              title="Promote your land"
+              onClose={() => setPromoteId(null)}
+            >
+              <p className="muted">
+                Promoting places <strong>{promoteListing.title}</strong> in the{" "}
+                <strong>YuTara Promoted</strong> banner on the home and
+                marketplace pages. Choose how long the promotion should last.
+              </p>
+              <label className="form-label">
+                Promotion length
+                <select
+                  className="form-input"
+                  value={promoteDays}
+                  onChange={(event) =>
+                    setPromoteDays(Number(event.target.value))
+                  }
+                >
+                  {PROMO_OPTIONS.map((option) => (
+                    <option key={option.days} value={option.days}>
+                      {option.label} — {formatMoney(option.price)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="review-panel">
+                <div className="review-row">
+                  <span>Promotion</span>
+                  <strong>{promoOption.label}</strong>
+                </div>
+                <div className="review-row">
+                  <span>Total</span>
+                  <strong>{formatMoney(promoOption.price)}</strong>
+                </div>
+              </div>
+              <div className="modal-foot">
+                <button
+                  className="button button-ghost"
+                  onClick={() => setPromoteId(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="button button-primary"
+                  onClick={() => {
+                    promoteLand(promoteListing.id, promoOption.days);
+                    setPromoteId(null);
+                  }}
+                >
+                  <Megaphone size={15} /> Pay {formatMoney(promoOption.price)} &amp;
+                  promote
+                </button>
+              </div>
+            </Modal>
           )}
 
           <div className="trust-card dashboard-note">

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FileCheck2 } from "lucide-react";
 import { Modal } from "./Modal";
-import { readTransactions } from "@/lib/transactions";
+import { readTransactions, Transaction } from "@/lib/transactions";
 import type { Property } from "@/lib/marketplace";
 
 export function DocumentVault({
@@ -14,11 +14,20 @@ export function DocumentVault({
   reservationId: string;
 }) {
   const [open, setOpen] = useState(false);
-  const transaction =
-    readTransactions().find((tx) => tx.reservationId === reservationId) ?? null;
+  const [transaction, setTransaction] = useState<Transaction | null>(null);
   const verificationDocs = property.submittedDocuments ?? [];
   const buyerDocs = transaction?.documents ?? [];
   const count = verificationDocs.length + buyerDocs.length;
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setTransaction(
+        readTransactions().find((tx) => tx.reservationId === reservationId) ??
+          null,
+      );
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [reservationId, open]);
 
   return (
     <>

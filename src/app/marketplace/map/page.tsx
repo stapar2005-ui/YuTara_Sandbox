@@ -14,19 +14,22 @@ import { readProperties, PROPERTIES_EVENT } from "@/lib/property-store";
 import { DemoUser, getStoredSession } from "@/lib/demo-auth";
 
 export default function VerifiedMapPage() {
-  const [listings, setListings] = useState<MarketplaceProperty[]>(() =>
-    readProperties().filter(isActiveListing),
-  );
-  const [selectedId, setSelectedId] = useState<number | undefined>(
-    () => readProperties().filter(isActiveListing)[0]?.id,
-  );
-  const [session] = useState<DemoUser | null>(() => getStoredSession());
+  const [listings, setListings] = useState<MarketplaceProperty[]>([]);
+  const [selectedId, setSelectedId] = useState<number | undefined>(undefined);
+  const [session, setSession] = useState<DemoUser | null>(null);
 
   useEffect(() => {
-    const sync = () => setListings(readProperties().filter(isActiveListing));
+    const sync = () => {
+      const next = readProperties().filter(isActiveListing);
+      setListings(next);
+      setSelectedId((current) => current ?? next[0]?.id);
+      setSession(getStoredSession());
+    };
+    const timer = window.setTimeout(sync, 0);
     window.addEventListener(PROPERTIES_EVENT, sync);
     window.addEventListener("storage", sync);
     return () => {
+      window.clearTimeout(timer);
       window.removeEventListener(PROPERTIES_EVENT, sync);
       window.removeEventListener("storage", sync);
     };

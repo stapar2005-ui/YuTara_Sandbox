@@ -53,6 +53,8 @@ export type MarketplaceProperty = {
   verificationId: string;
   submitted?: string;
   submittedDocuments?: string[];
+  promotionUntil?: string;
+  promotionDays?: number;
   terminationReason?: string;
   terminatedBy?: string;
   terminatedAt?: string;
@@ -76,6 +78,13 @@ export const getListingStatus = (property: MarketplaceProperty): ListingStatus =
 export const isActiveListing = (property: MarketplaceProperty): boolean =>
   (property.status === "PUBLISHED" || property.verificationStatus === "VERIFIED") &&
   getListingStatus(property) === "OPEN_FOR_OFFERS";
+
+/** True when a listing is promoted and its paid promotion window is still open. */
+export const isPromotionActive = (property: MarketplaceProperty): boolean => {
+  if (!property.promoted) return false;
+  if (!property.promotionUntil) return true;
+  return new Date(property.promotionUntil).getTime() > Date.now();
+};
 
 export const formatMoney = (value: number): string =>
   `₱${new Intl.NumberFormat("en-PH").format(value)}`;

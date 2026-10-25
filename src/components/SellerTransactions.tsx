@@ -11,6 +11,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { formatMoney } from "@/lib/marketplace";
+import { PromptModal } from "./PromptModal";
 import {
   acceptBooking,
   cancelTransaction,
@@ -30,6 +31,7 @@ import {
 export function SellerTransactions({ email }: { email: string }) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [declineId, setDeclineId] = useState<string | null>(null);
 
   useEffect(() => {
     const sync = () => setTransactions(readTransactions());
@@ -123,11 +125,7 @@ export function SellerTransactions({ email }: { email: string }) {
                   </button>
                   <button
                     className="button button-danger"
-                    onClick={() => {
-                      const reason = window.prompt("Reason for declining?");
-                      if (reason === null) return;
-                      cancelTransaction(tx.id, "SELLER", reason);
-                    }}
+                    onClick={() => setDeclineId(tx.id)}
                   >
                     Decline
                   </button>
@@ -166,6 +164,17 @@ export function SellerTransactions({ email }: { email: string }) {
           </article>
         );
       })}
+
+      {declineId && (
+        <PromptModal
+          title="Decline booking"
+          label="Reason for declining (shared with the buyer)"
+          placeholder="e.g. The offered price is below our agreed range."
+          confirmLabel="Decline booking"
+          onConfirm={(reason) => cancelTransaction(declineId, "SELLER", reason)}
+          onClose={() => setDeclineId(null)}
+        />
+      )}
     </div>
   );
 }

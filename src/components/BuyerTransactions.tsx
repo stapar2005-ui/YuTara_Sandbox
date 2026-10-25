@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ChevronDown, FileText, Lock, ShieldCheck } from "lucide-react";
 import { Modal } from "./Modal";
+import { PromptModal } from "./PromptModal";
 import { formatMoney } from "@/lib/marketplace";
 import {
   BUYER_DOCUMENT_OPTIONS,
@@ -26,6 +27,7 @@ export function BuyerTransactions({ email }: { email: string }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [documentsId, setDocumentsId] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
+  const [cancelId, setCancelId] = useState<string | null>(null);
 
   useEffect(() => {
     const sync = () => setTransactions(readTransactions());
@@ -163,13 +165,7 @@ export function BuyerTransactions({ email }: { email: string }) {
               {canCancel && (
                 <button
                   className="button button-danger"
-                  onClick={() => {
-                    const reason = window.prompt(
-                      "Reason for cancelling this booking?",
-                    );
-                    if (reason === null) return;
-                    cancelTransaction(tx.id, "BUYER", reason);
-                  }}
+                  onClick={() => setCancelId(tx.id)}
                 >
                   Cancel
                 </button>
@@ -219,6 +215,17 @@ export function BuyerTransactions({ email }: { email: string }) {
             </button>
           </div>
         </Modal>
+      )}
+
+      {cancelId && (
+        <PromptModal
+          title="Cancel booking"
+          label="Reason for cancelling (shared with the seller)"
+          placeholder="e.g. I found another property."
+          confirmLabel="Cancel booking"
+          onConfirm={(reason) => cancelTransaction(cancelId, "BUYER", reason)}
+          onClose={() => setCancelId(null)}
+        />
       )}
     </div>
   );

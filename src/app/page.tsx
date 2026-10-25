@@ -37,6 +37,8 @@ import { notificationsFor } from "@/lib/notifications";
 import { readProfile, writeProfile, UserProfile } from "@/lib/profile";
 import { resizeImage } from "@/lib/image";
 import { TRANSACTIONS_EVENT } from "@/lib/transactions";
+import { isPromotionActive } from "@/lib/marketplace";
+import { useAutoHideHeader } from "@/lib/use-auto-hide-header";
 import {
   applyTheme,
   getStoredTheme,
@@ -76,19 +78,7 @@ function Logo() {
 
 export default function Home() {
   const router = useRouter();
-  const [view, setView] = useState<View>(() => {
-    if (typeof window === "undefined") return "home";
-    const requested = new URLSearchParams(window.location.search).get(
-      "view",
-    ) as View | null;
-    const session = getStoredSession();
-    if (requested === "admin" && session?.role !== "ADMIN") return "home";
-    if (requested === "seller" && !session) return "home";
-    return requested &&
-      ["home", "marketplace", "property", "seller", "admin"].includes(requested)
-      ? requested
-      : "home";
-  });
+  const [view, setView] = useState<View>("home");
   const [properties, setProperties] = useState<Property[]>(getInitialProperties);
   const [notifications, setNotifications] = useState({
     inquiries: 0,
@@ -97,18 +87,10 @@ export default function Home() {
   });
   const [profile, setProfile] = useState<UserProfile>({});
   const [profileDraft, setProfileDraft] = useState<UserProfile>({});
-  const [session, setSession] = useState<DemoUser | null>(() => getStoredSession());
+  const headerHidden = useAutoHideHeader();
+  const [session, setSession] = useState<DemoUser | null>(null);
   const [selected, setSelected] = useState<Property | null>(null);
-  const [saved, setSaved] = useState<number[]>(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      const stored = window.localStorage.getItem("yutara-saved");
-      const parsed = stored ? JSON.parse(stored) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  });
+  const [saved, setSaved] = useState<number[]>([]);
   const [inquiryOpen, setInquiryOpen] = useState(false);
   const [inquiryMessage, setInquiryMessage] = useState(
     "Hello, I am interested in this property and would like to know more about its availability.",
@@ -116,10 +98,10 @@ export default function Home() {
   const [toast, setToast] = useState("");
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [sellerTab, setSellerTab] = useState<SellerTab>("listings");
-  const [inquiries, setInquiries] = useState<Inquiry[]>(() => readInquiries());
+  const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [profileOpen, setProfileOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [theme, setTheme] = useState<Theme>(() => getStoredTheme());
+  const [theme, setTheme] = useState<Theme>("light");
   const [query, setQuery] = useState("");
   const [type, setType] = useState("All types");
   const [verifiedOnly, setVerifiedOnly] = useState(false);
@@ -162,7 +144,12 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    applyTheme(getStoredTheme());
+    const timer = window.setTimeout(() => {
+      const stored = getStoredTheme();
+      applyTheme(stored);
+      setTheme(stored);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -177,10 +164,25 @@ export default function Home() {
       });
     };
     const syncInquiries = () => setInquiries(readInquiries());
+    const loadSaved = () => {
+      try {
+        const raw = window.localStorage.getItem("yutara-saved");
+        const parsed = raw ? JSON.parse(raw) : [];
+        setSaved(Array.isArray(parsed) ? parsed : []);
+      } catch {
+        setSaved([]);
+      }
+    };
+    const timer = window.setTimeout(() => {
+      syncSession();
+      syncInquiries();
+      loadSaved();
+    }, 0);
     window.addEventListener("storage", syncSession);
     window.addEventListener(SESSION_EVENT, syncSession);
     window.addEventListener(INQUIRIES_EVENT, syncInquiries);
     return () => {
+      window.clearTimeout(timer);
       window.removeEventListener("storage", syncSession);
       window.removeEventListener(SESSION_EVENT, syncSession);
       window.removeEventListener(INQUIRIES_EVENT, syncInquiries);
@@ -374,7 +376,7 @@ export default function Home() {
 
   return (
     <div className="app-shell">
-      <header className="topbar">
+      <header className={`topbar ${headerHidden ? "topbar-hidden" : ""}`}>
         <div className="container nav">
           <button
             onClick={() => go("home")}
@@ -388,7 +390,6 @@ export default function Home() {
                 Home
               </button>
               <button onClick={() => go("marketplace")}>Marketplace</button>
-              <Link href="/marketplace/map">Map View</Link>
               {session && <Link href="/dashboard">Dashboard</Link>}
               <button
                 onClick={() =>
@@ -474,6 +475,8 @@ export default function Home() {
                     <button
                       onClick={() => {
                         clearStoredSession();
+                        setStoredTheme("light");
+                        setTheme("light");
                         setSession(null);
                         setAccountMenuOpen(false);
                         setSelected(null);
@@ -589,8 +592,9 @@ export default function Home() {
               <PromotedCarousel
                 properties={publicProperties.filter(
                   (property) =>
-                    property.promoted &&
-                    (property.status === "PUBLISHED" || property.verificationStatus === "VERIFIED") &&
+                    isPromotionActive(property) &&
+                    (property.status === "PUBLISHED" ||
+                      property.verificationStatus === "VERIFIED") &&
                     getListingStatus(property) === "OPEN_FOR_OFFERS",
                 )}
                 saved={saved}

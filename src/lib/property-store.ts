@@ -41,6 +41,17 @@ export function writeProperties(list: Property[]): boolean {
   return saved;
 }
 
+export function updateProperty(
+  id: number,
+  patch: Partial<Property>,
+): boolean {
+  const list = readProperties();
+  const index = list.findIndex((property) => property.id === id);
+  if (index < 0) return false;
+  list[index] = { ...list[index], ...patch };
+  return writeProperties(list);
+}
+
 export function resetProperties(): void {
   if (typeof window === "undefined") return;
   try {
