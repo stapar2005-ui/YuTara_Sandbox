@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import {
   ArrowRight,
@@ -26,6 +26,23 @@ export function PromotedCarousel({
   const [active, setActive] = useState(0);
   const [dragStart, setDragStart] = useState<number | null>(null);
   const [imageFailedFor, setImageFailedFor] = useState<number | null>(null);
+  const [paused, setPaused] = useState(false);
+
+  // Auto-advance the promoted carousel; paused on hover/focus/interaction and
+  // disabled when the visitor prefers reduced motion.
+  useEffect(() => {
+    if (paused || properties.length <= 1) return;
+    if (
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return;
+    }
+    const id = window.setInterval(() => {
+      setActive((current) => (current + 1) % properties.length);
+    }, 5500);
+    return () => window.clearInterval(id);
+  }, [paused, properties.length]);
 
   if (!properties.length) {
     return (
@@ -130,9 +147,22 @@ export function PromotedCarousel({
         if (event.key === "ArrowLeft") move(-1);
         if (event.key === "ArrowRight") move(1);
       }}
-      onPointerDown={(event) => setDragStart(event.clientX)}
-      onPointerUp={(event) => endDrag(event.clientX)}
-      onPointerCancel={() => setDragStart(null)}
+      onPointerDown={(event) => {
+        setPaused(true);
+        setDragStart(event.clientX);
+      }}
+      onPointerUp={(event) => {
+        endDrag(event.clientX);
+        setPaused(false);
+      }}
+      onPointerCancel={() => {
+        setDragStart(null);
+        setPaused(false);
+      }}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocus={() => setPaused(true)}
+      onBlur={() => setPaused(false)}
     >
       <div key={property.id} className="featured-card featured-desktop-card">
         {renderImage("featured-image")}

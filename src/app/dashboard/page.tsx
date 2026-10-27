@@ -61,6 +61,7 @@ export default function DashboardPage() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [promoteId, setPromoteId] = useState<number | null>(null);
   const [promoteDays, setPromoteDays] = useState(30);
 
@@ -80,6 +81,7 @@ export default function DashboardPage() {
     const sync = () => {
       setProperties(readProperties());
       setTransactions(readTransactions());
+      setLoaded(true);
     };
     const timer = window.setTimeout(sync, 0);
     window.addEventListener(PROPERTIES_EVENT, sync);
@@ -111,6 +113,41 @@ export default function DashboardPage() {
   const promoOption =
     PROMO_OPTIONS.find((option) => option.days === promoteDays) ??
     PROMO_OPTIONS[2];
+
+  if (!loaded) {
+    return (
+      <div className="app-shell">
+        <AppNav session={session} />
+        <main className="workspace">
+          <div className="container">
+            <div className="eyebrow">Dashboard</div>
+            <h1 className="display">Loading your dashboard…</h1>
+            <div className="dashboard-grid" style={{ marginTop: 24 }}>
+              {[0, 1, 2, 3].map((index) => (
+                <article className="asset-card skeleton-card" key={index}>
+                  <div className="asset-image skeleton" />
+                  <div className="property-body">
+                    <div
+                      className="skeleton"
+                      style={{ height: 14, width: "40%" }}
+                    />
+                    <div
+                      className="skeleton"
+                      style={{ height: 20, width: "72%", marginTop: 10 }}
+                    />
+                    <div
+                      className="skeleton"
+                      style={{ height: 12, width: "52%", marginTop: 10 }}
+                    />
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="app-shell">
