@@ -9,11 +9,13 @@ import {
   CircleUserRound,
   FileCheck2,
   Leaf,
+  Menu,
   MessageCircle,
   Moon,
   ShieldCheck,
   Sun,
   Users,
+  X,
 } from "lucide-react";
 import {
   clearStoredSession,
@@ -97,6 +99,7 @@ export default function Home() {
   );
   const [toast, setToast] = useState("");
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [sellerTab, setSellerTab] = useState<SellerTab>("listings");
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -427,14 +430,14 @@ export default function Home() {
           )}
           <div className="nav-actions">
             {!session && (
-              <>
+              <span className="nav-auth">
                 <a className="button button-ghost" href="/login">
                   Login
                 </a>
                 <a className="button button-primary" href="/register">
                   Register
                 </a>
-              </>
+              </span>
             )}
             {session && (
               <button
@@ -515,8 +518,72 @@ export default function Home() {
                 )}
               </>
             )}
+            <button
+              className="icon-button nav-toggle"
+              aria-label={mobileNavOpen ? "Close menu" : "Open menu"}
+              aria-expanded={mobileNavOpen}
+              onClick={() => {
+                setMobileNavOpen((open) => !open);
+                setAccountMenuOpen(false);
+              }}
+            >
+              {mobileNavOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
           </div>
         </div>
+        {mobileNavOpen && (
+          <div className="mobile-nav" role="menu">
+            <button
+              onClick={() => {
+                setMobileNavOpen(false);
+                go("home");
+              }}
+            >
+              Home
+            </button>
+            <button
+              onClick={() => {
+                setMobileNavOpen(false);
+                go("marketplace");
+              }}
+            >
+              Marketplace
+            </button>
+            {session && (
+              <Link
+                href="/dashboard"
+                onClick={() => setMobileNavOpen(false)}
+              >
+                Dashboard
+              </Link>
+            )}
+            <button
+              onClick={() => {
+                setMobileNavOpen(false);
+                go("home");
+                window.setTimeout(
+                  () =>
+                    document
+                      .getElementById("about")
+                      ?.scrollIntoView({ behavior: "smooth" }),
+                  60,
+                );
+              }}
+            >
+              About Us
+            </button>
+            {!session && (
+              <>
+                <Link href="/login" onClick={() => setMobileNavOpen(false)}>
+                  Login
+                </Link>
+                <Link href="/register" onClick={() => setMobileNavOpen(false)}>
+                  Register
+                </Link>
+              </>
+            )}
+          </div>
+        )}
       </header>
       {view === "home" && (
         <>

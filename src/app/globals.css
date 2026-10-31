@@ -188,6 +188,47 @@ button {
   display: none;
   border-radius: 10px;
 }
+.nav-toggle {
+  display: none;
+  border-radius: 10px;
+}
+.nav-auth {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.mobile-nav {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 25;
+  padding: 8px 16px 16px;
+  background: white;
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 20px 34px rgba(25, 51, 39, 0.14);
+}
+.mobile-nav a,
+.mobile-nav button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 13px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--forest);
+  font-size: 0.98rem;
+  font-weight: 700;
+}
+.mobile-nav a:hover,
+.mobile-nav button:hover {
+  background: var(--forest-soft);
+}
+[data-theme="dark"] .mobile-nav {
+  background: #14201b;
+}
 .account-trigger {
   display: grid;
 }
@@ -1615,43 +1656,73 @@ button {
     height: auto;
   }
   .nav {
-    flex-wrap: wrap;
-    padding: 10px 0 5px;
+    flex-wrap: nowrap;
+    padding: 10px 0;
+    gap: 12px;
   }
   .nav-links {
-    display: flex;
-    order: 3;
-    width: 100%;
-    justify-content: center;
-    gap: 6px;
-    margin: 0;
-    padding: 6px 0 2px;
+    display: none;
   }
-  .nav-links button,
-  .nav-links .active,
-  .nav-links button:hover {
-    padding: 7px 9px;
-    font-size: 0.74rem;
+  .nav-auth {
+    display: none;
+  }
+  .nav-toggle {
+    display: grid;
+  }
+  .mobile-nav {
+    display: grid;
   }
   .nav-actions .button {
-    min-height: 36px;
-    padding: 0 10px;
-    font-size: 0.76rem;
+    min-height: 38px;
+    padding: 0 12px;
+    font-size: 0.78rem;
   }
   .account-menu {
     top: calc(100% + 8px);
   }
   .hero {
-    min-height: 570px;
+    min-height: auto;
+    padding: 52px 0 64px;
     background:
       linear-gradient(
-        90deg,
-        rgba(247, 248, 243, 0.97) 0%,
-        rgba(247, 248, 243, 0.82) 65%,
-        rgba(247, 248, 243, 0.35) 100%
+        180deg,
+        rgba(247, 248, 243, 0.82) 0%,
+        rgba(247, 248, 243, 0.93) 55%,
+        rgba(247, 248, 243, 0.99) 100%
       ),
       url("https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1200&q=85")
         center/cover;
+  }
+  .hero:after {
+    height: 56px;
+  }
+  .hero-content {
+    max-width: 100%;
+  }
+  .hero h1 {
+    font-size: clamp(2.6rem, 12vw, 3.5rem);
+    margin: 14px 0 16px;
+  }
+  .hero p {
+    max-width: 100%;
+    font-size: 1.02rem;
+    line-height: 1.6;
+  }
+  .hero-actions {
+    flex-direction: column;
+    align-items: stretch;
+    margin-top: 22px;
+  }
+  .hero-actions .button {
+    width: 100%;
+    white-space: nowrap;
+  }
+  .hero-note {
+    margin-top: 22px;
+    align-items: flex-start;
+  }
+  .section {
+    padding: 56px 0;
   }
   .trust-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -1720,17 +1791,13 @@ button {
     height: 68px;
   }
   .hero {
-    padding: 66px 0 90px;
+    padding: 46px 0 56px;
   }
   .hero h1 {
-    font-size: 4.2rem;
-  }
-  .hero-actions {
-    flex-direction: column;
-    align-items: stretch;
+    font-size: clamp(2.4rem, 13vw, 3rem);
   }
   .section {
-    padding: 68px 0;
+    padding: 48px 0;
   }
   .section-heading {
     display: block;
@@ -3365,9 +3432,6 @@ button {
   .marketplace,
   .map-page {
     padding-top: 34px;
-  }
-  .section {
-    padding: 52px 0;
   }
   .review-row {
     flex-wrap: wrap;
