@@ -237,6 +237,29 @@ export default function Home() {
     };
   }, []);
 
+  // Close the account menu on outside click or Escape.
+  useEffect(() => {
+    if (!accountMenuOpen) return;
+    const onPointer = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (
+        !target.closest(".account-trigger") &&
+        !target.closest(".account-menu")
+      ) {
+        setAccountMenuOpen(false);
+      }
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setAccountMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [accountMenuOpen]);
+
   const toggleSave = (id: number) => {
     const next = saved.includes(id)
       ? saved.filter((item) => item !== id)
@@ -415,7 +438,7 @@ export default function Home() {
             )}
             {session && (
               <button
-                className="menu-button notif-trigger"
+                className="icon-button notif-trigger"
                 aria-label={`Notifications (${notifications.total})`}
                 onClick={() => openSeller("transactions")}
               >
@@ -430,13 +453,14 @@ export default function Home() {
                 <button
                   className="menu-button account-trigger"
                   aria-label="Open account menu"
+                  aria-haspopup="menu"
                   aria-expanded={accountMenuOpen}
                   onClick={() => setAccountMenuOpen(!accountMenuOpen)}
                 >
                   <CircleUserRound size={19} />
                 </button>
                 {accountMenuOpen && (
-                  <div className="account-menu">
+                  <div className="account-menu" role="menu">
                     <button
                       onClick={() => {
                         setAccountMenuOpen(false);

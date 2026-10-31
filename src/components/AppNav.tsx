@@ -44,7 +44,7 @@ export function AppNav({ session }: { session: DemoUser | null }) {
           {session ? (
             <>
               <Link
-                className="menu-button notif-trigger"
+                className="icon-button notif-trigger"
                 href="/dashboard"
                 aria-label={`Notifications (${count})`}
               >

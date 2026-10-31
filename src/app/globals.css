@@ -115,6 +115,7 @@ button {
   z-index: 20;
   backdrop-filter: blur(16px);
   transition: transform 0.28s ease;
+  padding-top: env(safe-area-inset-top, 0px);
 }
 .topbar-hidden {
   transform: translateY(-101%);
@@ -150,7 +151,7 @@ button {
   display: flex;
   align-items: center;
   gap: 27px;
-  margin-left: auto;
+  margin-inline: auto;
 }
 .nav-links button {
   color: #526057;
@@ -1128,6 +1129,7 @@ button {
   letter-spacing: -0.04em;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
+  line-clamp: 3;
 }
 .featured-location {
   display: flex;
@@ -1884,6 +1886,7 @@ button {
     letter-spacing: -0.02em;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
+    line-clamp: 3;
   }
   .featured-mobile-description {
     display: -webkit-box;
@@ -1894,6 +1897,7 @@ button {
     line-height: 1.25;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
+    line-clamp: 2;
   }
   .featured-mobile-content .featured-location {
     color: var(--muted);
@@ -3259,6 +3263,71 @@ button {
   .tx-card,
   .spinner {
     animation: none !important;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Mobile cleanup (phones / mobile webviews)                           */
+/* ------------------------------------------------------------------ */
+@media (max-width: 640px) {
+  /* Tables stay readable by scrolling instead of squishing. */
+  .table th,
+  .table td {
+    padding: 12px 10px;
+  }
+
+  /* Let action rows wrap instead of overflowing. */
+  .verify-office-actions,
+  .verify-office-foot,
+  .verify-decision-actions,
+  .inquiry-item,
+  .inquiry-actions,
+  .admin-actions,
+  .nav-actions {
+    flex-wrap: wrap;
+  }
+  .nav-actions {
+    justify-content: flex-end;
+  }
+
+  /* Full-width modal actions read better on phones. */
+  .modal-foot {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+  .modal-foot .button {
+    width: 100%;
+  }
+
+  .featured-content h3 {
+    font-size: 1.7rem;
+  }
+  .stat strong {
+    font-size: 1.4rem;
+  }
+  .document-card,
+  .verify-doc {
+    align-items: flex-start;
+  }
+
+  /* Comfortable touch targets in the header. */
+  .icon-button,
+  .menu-button,
+  .account-trigger {
+    width: 42px;
+    height: 42px;
+  }
+}
+
+@media (max-width: 400px) {
+  .brand-logo {
+    width: 104px;
+  }
+  .hero h1 {
+    font-size: clamp(2.2rem, 13vw, 3rem);
+  }
+  .container {
+    width: calc(100% - 22px);
   }
 }
 
