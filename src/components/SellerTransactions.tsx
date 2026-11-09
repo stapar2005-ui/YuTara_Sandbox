@@ -2,22 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  BadgeCheck,
-  ChevronDown,
-  FileText,
-  Handshake,
-  Truck,
-  Wallet,
-} from "lucide-react";
+import { BadgeCheck, ChevronDown, FileText, Handshake, ShieldCheck, Wallet } from "lucide-react";
 import { formatMoney } from "@/lib/marketplace";
 import { PromptModal } from "./PromptModal";
 import {
-  acceptBooking,
   cancelTransaction,
-  completeTransaction,
   isTransactionSeller,
   readTransactions,
+  recordSigning,
   TRANSACTIONS_EVENT,
   Transaction,
   STAGE_LABEL,
@@ -34,7 +26,10 @@ export function SellerTransactions({ email }: { email: string }) {
   const [declineId, setDeclineId] = useState<string | null>(null);
 
   useEffect(() => {
-    const sync = () => setTransactions(readTransactions());
+    const sync = async () => {
+      const data = await readTransactions();
+      setTransactions(data);
+    };
     sync();
     window.addEventListener(TRANSACTIONS_EVENT, sync);
     window.addEventListener("storage", sync);
@@ -52,8 +47,8 @@ export function SellerTransactions({ email }: { email: string }) {
         <Wallet size={26} />
         <h3>No bookings yet</h3>
         <p className="muted">
-          When a buyer books one of your listings, the booking appears here for
-          you to review.
+          When a buyer books one of your listings, the booking appears here. The
+          agency coordinates the purchase and escrow with you.
         </p>
         <Link className="button button-ghost" href="/marketplace">
           View your listings
@@ -66,6 +61,8 @@ export function SellerTransactions({ email }: { email: string }) {
     <div className="tx-list">
       {mine.map((tx) => {
         const expanded = openId === tx.id;
+        const signedBySeller = tx.signedBy.includes("SELLER");
+        const bothSigned = tx.signedBy.length === 2;
         return (
           <article className="tx-card" key={tx.id}>
             <div className="tx-card-head">
@@ -79,7 +76,13 @@ export function SellerTransactions({ email }: { email: string }) {
               <div className="tx-card-main">
                 <div className="badge-row">
                   <span
-                    className={`status ${tx.stage === "COMPLETED" || tx.stage === "VERIFIED" ? "verified" : tx.stage === "CANCELLED" ? "correction" : "review"}`}
+                    className={`status ${
+                      tx.stage === "COMPLETED"
+                        ? "verified"
+                        : tx.stage === "CANCELLED"
+                          ? "correction"
+                          : "review"
+                    }`}
                   >
                     {STAGE_LABEL[tx.stage]}
                   </span>
@@ -117,12 +120,10 @@ export function SellerTransactions({ email }: { email: string }) {
 
               {tx.stage === "BOOKING_REQUESTED" && (
                 <>
-                  <button
-                    className="button button-primary"
-                    onClick={() => acceptBooking(tx.id, "SELLER")}
-                  >
-                    <Handshake size={15} /> Agree &amp; request documents
-                  </button>
+                  <span className="tx-note">
+                    A buyer has requested your land. The agency will review the
+                    booking.
+                  </span>
                   <button
                     className="button button-danger"
                     onClick={() => setDeclineId(tx.id)}
@@ -132,27 +133,50 @@ export function SellerTransactions({ email }: { email: string }) {
                 </>
               )}
 
-              {tx.stage === "DOCUMENTS_REQUESTED" && (
+              {tx.stage === "AGENCY_REVIEW" && (
                 <span className="tx-note">
-                  <FileText size={13} /> Waiting for the buyer to provide
-                  documents.
+                  The agency is reviewing the booking. You will be notified when
+                  payment is held in escrow.
                 </span>
               )}
 
-              {tx.stage === "DOCUMENTS_SUBMITTED" && (
-                <span className="tx-note">
-                  <FileText size={13} /> Documents submitted — awaiting YuTara
-                  verification.
+              {tx.stage === "PAYMENT_HELD" && (
+                <span className="tx-note tx-note-ok">
+                  <FileText size={13} />
+                  The buyer&apos;s reservation fee is held in agency escrow.
+                  Transfer documents are being prepared.
                 </span>
               )}
 
-              {tx.stage === "VERIFIED" && (
+              {tx.stage === "DOCUMENTS_PREPARED" && !signedBySeller && (
                 <button
                   className="button button-primary"
-                  onClick={() => completeTransaction(tx.id, "SELLER")}
+                  onClick={async () => {
+                    await recordSigning(tx.id, "SELLER", "SELLER");
+                  }}
                 >
-                  <Truck size={15} /> Complete transaction
+                  <Handshake size={15} /> Sign transfer documents
                 </button>
+              )}
+
+              {tx.stage === "DOCUMENTS_PREPARED" && signedBySeller && !bothSigned && (
+                <span className="tx-note">
+                  You have signed. Awaiting the buyer&apos;s signature.
+                </span>
+              )}
+
+              {tx.stage === "PARTIES_SIGNED" && (
+                <span className="tx-note tx-note-ok">
+                  Both parties have signed. The agency will release funds to
+                  you.
+                </span>
+              )}
+
+              {tx.stage === "FUNDS_RELEASED" && (
+                <span className="tx-note tx-note-ok">
+                  <ShieldCheck size={14} />
+                  Funds released to you from escrow. Transfer is being recorded.
+                </span>
               )}
 
               {tx.stage === "COMPLETED" && (

@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowRight, Check, Heart, MapPin } from "lucide-react";
-import { getListingStatus, money, Property } from "@/lib/marketplace";
+import { getListingStatus, isActiveListing, money, Property } from "@/lib/marketplace";
 
 export function PropertyCard({
   property,
@@ -14,8 +14,7 @@ export function PropertyCard({
   onSave: () => void;
   onOpen: () => void;
 }) {
-  const isVerified =
-    property.status === "PUBLISHED" || property.verificationStatus === "VERIFIED";
+  const isVerified = isActiveListing(property);
 
   return (
     <article className="property-card">
@@ -29,7 +28,7 @@ export function PropertyCard({
         <div className="badge-row">
           {isVerified && (
             <span className="badge badge-verified">
-              <Check size={12} /> Verified
+              <Check size={12} /> Active
             </span>
           )}
           {property.promoted && (

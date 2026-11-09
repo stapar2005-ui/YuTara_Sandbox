@@ -7,27 +7,26 @@ import { readTransactions, Transaction } from "@/lib/transactions";
 import type { Property } from "@/lib/marketplace";
 
 export function DocumentVault({
-  property,
+  _property,
   reservationId,
 }: {
-  property: Property;
+  _property: Property;
   reservationId: string;
 }) {
   const [open, setOpen] = useState(false);
   const [transaction, setTransaction] = useState<Transaction | null>(null);
-  const verificationDocs = property.submittedDocuments ?? [];
-  const buyerDocs = transaction?.documents ?? [];
-  const count = verificationDocs.length + buyerDocs.length;
+  void _property;
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setTransaction(
-        readTransactions().find((tx) => tx.reservationId === reservationId) ??
-          null,
-      );
+    const timer = window.setTimeout(async () => {
+      const txs = await readTransactions();
+      setTransaction(txs.find((tx) => tx.reservationId === reservationId) ?? null);
     }, 0);
     return () => window.clearTimeout(timer);
   }, [reservationId, open]);
+
+  const docs = transaction?.documentsPrepared ?? [];
+  const count = docs.length;
 
   return (
     <>
@@ -46,34 +45,23 @@ export function DocumentVault({
       {open && (
         <Modal title="Document Vault" onClose={() => setOpen(false)}>
           <div className="verify-docs">
-            <h4>Verification documents (seller)</h4>
-            {verificationDocs.length ? (
+            <h4>Agency-prepared documents</h4>
+            {docs.length ? (
               <ul>
-                {verificationDocs.map((name, index) => (
+                {docs.map((name, index) => (
                   <li key={`${name}-${index}`}>{name}</li>
                 ))}
               </ul>
             ) : (
               <p className="muted">
-                No seller verification documents are on file for this listing.
-              </p>
-            )}
-            <h4>Your submitted documents</h4>
-            {buyerDocs.length ? (
-              <ul>
-                {buyerDocs.map((name, index) => (
-                  <li key={`${name}-${index}`}>{name}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className="muted">
-                You have not submitted documents for this reservation yet.
+                No agency-prepared documents are on file for this transaction
+                yet.
               </p>
             )}
           </div>
           <p className="muted" style={{ marginTop: 12 }}>
-            Documents are visible only to the authenticated buyer and YuTara
-            reviewers.
+            Documents are managed by the partner agency and visible to both
+            parties once prepared.
           </p>
         </Modal>
       )}

@@ -1,3 +1,6 @@
+import { SupabaseAdapter } from "./storage-adapter";
+import { supabase } from "./supabase";
+
 export type OfficeCheckStatus =
   | "PENDING"
   | "CLEARED"
@@ -42,6 +45,41 @@ export type VerificationRecord = {
 export const VERIFICATION_KEY = "yutara-verifications";
 export const VERIFICATION_EVENT = "yutara-verifications-change";
 
+const storage = new SupabaseAdapter(supabase, VERIFICATION_KEY);
+
+function emit(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(VERIFICATION_EVENT));
+}
+
+export async function readVerificationRecords(): Promise<VerificationRecord[]> {
+  if (typeof window === "undefined") return [];
+  try {
+    const stored = await storage.getItem<VerificationRecord[]>(VERIFICATION_KEY);
+    if (!stored) return [];
+    return stored.filter(
+      (item): item is VerificationRecord =>
+        Boolean(
+          item &&
+            typeof item === "object" &&
+            typeof item.propertyId === "number" &&
+            Array.isArray(item.documents) &&
+            Array.isArray(item.checks),
+        ),
+    );
+  } catch {
+    return [];
+  }
+}
+
+async function writeVerificationRecords(
+  records: VerificationRecord[],
+): Promise<void> {
+  if (typeof window === "undefined") return;
+  await storage.setItem(VERIFICATION_KEY, records);
+  emit();
+}
+
 const OFFICE_TEMPLATE: { id: string; office: string; scope: string }[] = [
   {
     id: "rd",
@@ -83,43 +121,6 @@ const DOCUMENT_TEMPLATE: { key: string; name: string; required: boolean }[] = [
   { key: "supporting", name: "Supporting property document", required: false },
 ];
 
-function emit(): void {
-  if (typeof window === "undefined") return;
-  window.dispatchEvent(new Event(VERIFICATION_EVENT));
-}
-
-export function readVerificationRecords(): VerificationRecord[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(VERIFICATION_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (item): item is VerificationRecord =>
-        Boolean(
-          item &&
-            typeof item === "object" &&
-            typeof item.propertyId === "number" &&
-            Array.isArray(item.documents) &&
-            Array.isArray(item.checks),
-        ),
-    );
-  } catch {
-    return [];
-  }
-}
-
-function writeVerificationRecords(records: VerificationRecord[]): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(VERIFICATION_KEY, JSON.stringify(records));
-  } catch {
-    // ignore
-  }
-  emit();
-}
-
 export function defaultVerificationRecord(
   propertyId: number,
 ): VerificationRecord {
@@ -141,32 +142,30 @@ export function defaultVerificationRecord(
   };
 }
 
-export function getVerificationRecord(
+export async function getVerificationRecord(
   propertyId: number,
-): VerificationRecord {
-  const existing = readVerificationRecords().find(
+): Promise<VerificationRecord> {
+  const existing = (await readVerificationRecords()).find(
     (record) => record.propertyId === propertyId,
   );
   return existing || defaultVerificationRecord(propertyId);
 }
 
-export function saveVerificationRecord(
+export async function saveVerificationRecord(
   record: VerificationRecord,
-): VerificationRecord {
-  const records = readVerificationRecords();
+): Promise<VerificationRecord> {
+  const records = await readVerificationRecords();
   const index = records.findIndex(
     (item) => item.propertyId === record.propertyId,
   );
   const next = { ...record, updatedAt: new Date().toISOString() };
   if (index >= 0) records[index] = next;
   else records.push(next);
-  writeVerificationRecords(records);
+  await writeVerificationRecords(records);
   return next;
 }
 
 export function isReadyForApproval(record: VerificationRecord): boolean {
-  // Approval requires the required documents to be reviewed and verified.
-  // Office checks are recorded for the audit trail but do not block publishing.
   return record.documents
     .filter((document) => document.required)
     .every((document) => document.status === "VERIFIED");

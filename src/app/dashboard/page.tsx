@@ -8,8 +8,8 @@ import {
   Check,
   MapPin,
   Megaphone,
-  ShieldCheck,
   Store,
+  Users,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { AppNav } from "@/components/AppNav";
@@ -49,7 +49,7 @@ const LISTING_STATUS_CLASS: Record<string, string> = {
 function EmptyNote({ children }: { children: ReactNode }) {
   return (
     <div className="table-wrap empty-dashboard">
-      <ShieldCheck size={24} />
+      <Users size={24} />
       <p className="muted">{children}</p>
     </div>
   );
@@ -66,21 +66,26 @@ export default function DashboardPage() {
   const [promoteDays, setPromoteDays] = useState(30);
 
   useEffect(() => {
-    window.setTimeout(() => {
+    window.setTimeout(async () => {
       const current = getStoredSession();
       if (!current) {
         router.replace("/login");
         return;
       }
       setSession(current);
-      setReservations(readReservations());
+      const res = await readReservations();
+      setReservations(res);
     }, 0);
   }, [router]);
 
   useEffect(() => {
-    const sync = () => {
-      setProperties(readProperties());
-      setTransactions(readTransactions());
+    const sync = async () => {
+      const [props, txs] = await Promise.all([
+        readProperties(),
+        readTransactions(),
+      ]);
+      setProperties(props);
+      setTransactions(txs);
       setLoaded(true);
     };
     const timer = window.setTimeout(sync, 0);
@@ -211,8 +216,8 @@ export default function DashboardPage() {
                       }}
                     />
                     <div className="property-body">
-                      <span className="badge badge-verified">
-                        <Check size={12} /> YuTara verified
+                      <span className="badge badge-status">
+                        <Check size={12} /> Listed
                       </span>
                       <h3>{property.title}</h3>
                       <p className="property-location">
@@ -227,7 +232,7 @@ export default function DashboardPage() {
                         </span>
                       </div>
                       <DocumentVault
-                        property={property}
+                        _property={property}
                         reservationId={reservation.id}
                       />
                       <small className="muted">Reservation {reservation.id}</small>
@@ -272,9 +277,9 @@ export default function DashboardPage() {
                   />
                   <div className="property-body">
                     <span
-                      className={`status ${LISTING_STATUS_CLASS[listing.status] ?? "review"}`}
+                      className={`status ${LISTING_STATUS_CLASS[listing.listingStatus] ?? "review"}`}
                     >
-                      {listing.status.replaceAll("_", " ")}
+                      {listing.listingStatus.replaceAll("_", " ")}
                     </span>
                     <h3>{listing.title}</h3>
                     <p className="property-location">
@@ -288,12 +293,6 @@ export default function DashboardPage() {
                         {listing.area.toLocaleString()} sqm
                       </span>
                     </div>
-                    {listing.status === "UNDER_REVIEW" && (
-                      <small className="muted">
-                        Awaiting YuTara verification. It becomes visible in the
-                        marketplace once approved.
-                      </small>
-                    )}
                     {isPromotionActive(listing) ? (
                       <div className="promo-box">
                         <span className="badge badge-promoted">
@@ -304,7 +303,9 @@ export default function DashboardPage() {
                         </small>
                         <button
                           className="button button-ghost"
-                          onClick={() => endPromotion(listing.id)}
+                          onClick={async () => {
+                            await endPromotion(listing.id);
+                          }}
                         >
                           Stop promotion
                         </button>
@@ -321,12 +322,12 @@ export default function DashboardPage() {
                         >
                           <Megaphone size={14} /> Promote this land
                         </button>
-                        {!isActiveListing(listing) && (
-                          <small className="muted">
-                            You can promote this land once it is approved and live
-                            on the marketplace.
-                          </small>
-                        )}
+                          {!isActiveListing(listing) && (
+                            <small className="muted">
+                              You can promote this land once it is live on the
+                              marketplace.
+                            </small>
+                          )}
                       </div>
                     )}
                   </div>
@@ -436,8 +437,8 @@ export default function DashboardPage() {
                 </button>
                 <button
                   className="button button-primary"
-                  onClick={() => {
-                    promoteLand(promoteListing.id, promoOption.days);
+                  onClick={async () => {
+                    await promoteLand(promoteListing.id, promoOption.days);
                     setPromoteId(null);
                   }}
                 >
@@ -450,12 +451,13 @@ export default function DashboardPage() {
 
           <div className="trust-card dashboard-note">
             <h3>
-              <ShieldCheck size={18} /> Keep your due diligence active
+              <Users size={18} /> Keep your due diligence active
             </h3>
             <p>
-              YuTara verification helps you understand submitted information. It
-              does not guarantee legal ownership, replace government
-              verification, or make a reservation equivalent to ownership.
+              The partner agency coordinates escrow, documents, and the transfer
+              from listing to closing. YuTara does not guarantee legal
+              ownership, replace government verification, or make a reservation
+              equivalent to ownership.
             </p>
           </div>
         </div>

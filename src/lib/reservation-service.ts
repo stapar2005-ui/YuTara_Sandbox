@@ -1,4 +1,12 @@
 import { MarketplaceProperty } from "./marketplace";
+import { SupabaseAdapter } from "./storage-adapter";
+import { supabase } from "./supabase";
+
+const KEY = "yutara-reservations";
+export const RESERVATIONS_KEY = KEY;
+export const RESERVATION_FEE = 25000;
+
+const storage = new SupabaseAdapter(supabase, KEY);
 
 export type ReservationStatus =
   | "PENDING_PAYMENT"
@@ -21,26 +29,21 @@ export type Reservation = {
   expiresAt: string;
 };
 
-export const RESERVATIONS_KEY = "yutara-reservations";
-export const RESERVATION_FEE = 25000;
-
-export function readReservations(): Reservation[] {
+export async function readReservations(): Promise<Reservation[]> {
   if (typeof window === "undefined") return [];
-  const raw = window.localStorage.getItem(RESERVATIONS_KEY);
-  if (!raw) return [];
+  const stored = await storage.getItem<Reservation[]>(KEY);
+  if (!stored) return [];
   try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
+    return stored.filter(
       (item): item is Reservation =>
         Boolean(
           item &&
-          typeof item === "object" &&
-          typeof item.id === "string" &&
-          typeof item.propertyId === "number" &&
-          typeof item.buyerId === "string" &&
-          typeof item.status === "string" &&
-          typeof item.reservationFee === "number",
+            typeof item === "object" &&
+            typeof item.id === "string" &&
+            typeof item.propertyId === "number" &&
+            typeof item.buyerId === "string" &&
+            typeof item.status === "string" &&
+            typeof item.reservationFee === "number",
         ),
     );
   } catch {
@@ -48,37 +51,28 @@ export function readReservations(): Reservation[] {
   }
 }
 
-function writeReservations(reservations: Reservation[]) {
+async function writeReservations(reservations: Reservation[]) {
   if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(RESERVATIONS_KEY, JSON.stringify(reservations));
-  } catch {
-    // ignore
-  }
+  await storage.setItem(KEY, reservations);
 }
 
-export function createReservation(
+export async function createReservation(
   property: MarketplaceProperty,
   buyerId: string,
-): { reservation?: Reservation; error?: string } {
+): Promise<{ reservation?: Reservation; error?: string }> {
   if (!buyerId) return { error: "You must be signed in to reserve a property." };
-  const isVerified =
-    property.verificationStatus === "VERIFIED" ||
-    property.status === "PUBLISHED" ||
-    property.status === "VERIFIED";
+  const isVerified = property.listingStatus === "OPEN_FOR_OFFERS";
 
   if (!isVerified || property.listingStatus !== "OPEN_FOR_OFFERS") {
     return { error: "This property is no longer available for reservation." };
   }
-  const reservations = readReservations();
+  const reservations = await readReservations();
   const active = reservations.filter(
     (item) =>
       item.propertyId === property.id &&
       ["PENDING_PAYMENT", "RESERVED", "COMPLETED"].includes(item.status),
   );
 
-  // Resume the buyer's own reservation (also keeps this idempotent when
-  // effects run twice in development).
   const own = active.find((item) => item.buyerId === buyerId);
   if (own) return { reservation: own };
 
@@ -103,15 +97,15 @@ export function createReservation(
     updatedAt: now.toISOString(),
     expiresAt: new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString(),
   };
-  writeReservations([...reservations, reservation]);
+  await writeReservations([...reservations, reservation]);
   return { reservation };
 }
 
-export function confirmSimulatedPayment(
+export async function confirmSimulatedPayment(
   reservationId: string,
   method: string,
-): Reservation | null {
-  const reservations = readReservations();
+): Promise<Reservation | null> {
+  const reservations = await readReservations();
   const index = reservations.findIndex((item) => item.id === reservationId);
   if (index < 0 || reservations[index].status !== "PENDING_PAYMENT") return null;
   const updated: Reservation = {
@@ -122,6 +116,6 @@ export function confirmSimulatedPayment(
     updatedAt: new Date().toISOString(),
   };
   reservations[index] = updated;
-  writeReservations(reservations);
+  await writeReservations(reservations);
   return updated;
 }

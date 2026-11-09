@@ -18,8 +18,11 @@ export function AppNav({ session }: { session: DemoUser | null }) {
   const headerHidden = useAutoHideHeader();
 
   useEffect(() => {
-    const sync = () =>
-      setCount(notificationsFor(session?.email ?? null, readProperties()).total);
+    const sync = async () => {
+      const props = await readProperties();
+      const counts = await notificationsFor(session?.email ?? null, props);
+      setCount(counts.total);
+    };
     const timer = window.setTimeout(sync, 0);
     window.addEventListener("storage", sync);
     return () => {
@@ -107,7 +110,10 @@ export function AppNav({ session }: { session: DemoUser | null }) {
               <Link href="/login" onClick={() => setMobileNavOpen(false)}>
                 Login
               </Link>
-              <Link href="/register" onClick={() => setMobileNavOpen(false)}>
+              <Link
+                href="/register"
+                onClick={() => setMobileNavOpen(false)}
+              >
                 Register
               </Link>
             </>

@@ -99,14 +99,16 @@ export default function LoginPage() {
             </button>
           </form>
           <p className="login-register">
-            Don&apos;t have an account? <Link href="/register">Register</Link>
+            Don&apos;t have an account?{" "}
+            <Link href="/register" className="button-link">
+              Register here
+            </Link>
           </p>
           {isDemoMode && (
             <div className="demo-accounts">
               <strong>Sample accounts</strong>
               <span>
-                admin@yutara.com · user@yutara.com · buyer@yutara.com ·
-                seller@yutara.com
+                admin@yutara.com · admin2@yutara.com · admin3@yutara.com
               </span>
               <span>Password: 12345</span>
             </div>

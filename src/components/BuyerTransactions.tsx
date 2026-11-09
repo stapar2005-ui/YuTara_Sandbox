@@ -2,16 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, FileText, Lock, ShieldCheck } from "lucide-react";
-import { Modal } from "./Modal";
+import { ChevronDown, Handshake, ShieldCheck } from "lucide-react";
 import { PromptModal } from "./PromptModal";
 import { formatMoney } from "@/lib/marketplace";
 import {
-  BUYER_DOCUMENT_OPTIONS,
   cancelTransaction,
   isTransactionBuyer,
   readTransactions,
-  submitTransactionDocuments,
+  recordSigning,
   TRANSACTIONS_EVENT,
   Transaction,
   STAGE_LABEL,
@@ -25,12 +23,13 @@ import {
 export function BuyerTransactions({ email }: { email: string }) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [documentsId, setDocumentsId] = useState<string | null>(null);
-  const [selected, setSelected] = useState<string[]>([]);
   const [cancelId, setCancelId] = useState<string | null>(null);
 
   useEffect(() => {
-    const sync = () => setTransactions(readTransactions());
+    const sync = async () => {
+      const data = await readTransactions();
+      setTransactions(data);
+    };
     sync();
     window.addEventListener(TRANSACTIONS_EVENT, sync);
     window.addEventListener("storage", sync);
@@ -48,22 +47,13 @@ export function BuyerTransactions({ email }: { email: string }) {
         <ShieldCheck size={26} />
         <h3>No bookings yet</h3>
         <p className="muted">
-          Reserve a verified property and your booking will appear here.
+          Reserve a property and your booking will appear here. The agency will
+          coordinate the purchase with the seller.
         </p>
         <Link className="button button-ghost" href="/marketplace/map">
-          Open verified map
+          Open map
         </Link>
       </div>
-    );
-  }
-
-  const docTx = mine.find((tx) => tx.id === documentsId) || null;
-
-  function toggleDoc(name: string) {
-    setSelected((current) =>
-      current.includes(name)
-        ? current.filter((item) => item !== name)
-        : [...current, name],
     );
   }
 
@@ -73,6 +63,8 @@ export function BuyerTransactions({ email }: { email: string }) {
         const expanded = openId === tx.id;
         const canCancel =
           tx.stage !== "COMPLETED" && tx.stage !== "CANCELLED";
+        const signedByBuyer = tx.signedBy.includes("BUYER");
+        const bothSigned = tx.signedBy.length === 2;
         return (
           <article className="tx-card" key={tx.id}>
             <div className="tx-card-head">
@@ -86,7 +78,13 @@ export function BuyerTransactions({ email }: { email: string }) {
               <div className="tx-card-main">
                 <div className="badge-row">
                   <span
-                    className={`status ${tx.stage === "COMPLETED" || tx.stage === "VERIFIED" ? "verified" : tx.stage === "CANCELLED" ? "correction" : "review"}`}
+                    className={`status ${
+                      tx.stage === "COMPLETED"
+                        ? "verified"
+                        : tx.stage === "CANCELLED"
+                          ? "correction"
+                          : "review"
+                    }`}
                   >
                     {STAGE_LABEL[tx.stage]}
                   </span>
@@ -126,33 +124,52 @@ export function BuyerTransactions({ email }: { email: string }) {
 
               {tx.stage === "BOOKING_REQUESTED" && (
                 <span className="tx-note">
-                  Waiting for the seller to agree to your booking.
+                  Waiting for the agency to review your booking.
                 </span>
               )}
 
-              {tx.stage === "DOCUMENTS_REQUESTED" && (
+              {tx.stage === "AGENCY_REVIEW" && (
+                <span className="tx-note">
+                  The agency is reviewing your booking. You will be notified
+                  once it is accepted.
+                </span>
+              )}
+
+              {tx.stage === "PAYMENT_HELD" && (
+                <span className="tx-note">
+                  Your reservation fee is held in agency escrow. The agency will
+                  prepare the transfer documents next.
+                </span>
+              )}
+
+              {tx.stage === "DOCUMENTS_PREPARED" && !signedByBuyer && (
                 <button
                   className="button button-primary"
-                  onClick={() => {
-                    setSelected(tx.documents);
-                    setDocumentsId(tx.id);
+                  onClick={async () => {
+                    await recordSigning(tx.id, "AGENCY", "BUYER");
                   }}
                 >
-                  <FileText size={15} /> Provide documents
+                  <Handshake size={15} /> Sign transfer documents
                 </button>
               )}
 
-              {tx.stage === "DOCUMENTS_SUBMITTED" && (
+              {tx.stage === "DOCUMENTS_PREPARED" && signedByBuyer && !bothSigned && (
                 <span className="tx-note">
-                  <Lock size={13} /> Documents submitted — awaiting YuTara
-                  verification.
+                  You have signed. Awaiting the seller&apos;s signature.
                 </span>
               )}
 
-              {tx.stage === "VERIFIED" && (
+              {tx.stage === "PARTIES_SIGNED" && (
                 <span className="tx-note tx-note-ok">
-                  <ShieldCheck size={14} /> Verified — the seller will complete
-                  the transfer.
+                  Both parties have signed. The agency will release funds to
+                  the seller.
+                </span>
+              )}
+
+              {tx.stage === "FUNDS_RELEASED" && (
+                <span className="tx-note tx-note-ok">
+                  <ShieldCheck size={14} />
+                  Funds released to the seller. Transfer is being recorded.
                 </span>
               )}
 
@@ -174,48 +191,6 @@ export function BuyerTransactions({ email }: { email: string }) {
           </article>
         );
       })}
-
-      {docTx && (
-        <Modal
-          title="Provide documents"
-          onClose={() => setDocumentsId(null)}
-        >
-          <p className="muted">
-            Select the documents you are providing for{" "}
-            <strong>{docTx.propertyTitle}</strong>. YuTara will review them.
-          </p>
-          <div className="verify-docs">
-            {BUYER_DOCUMENT_OPTIONS.map((option) => (
-              <label className="check-label" key={option} style={{ padding: 10 }}>
-                <input
-                  type="checkbox"
-                  checked={selected.includes(option)}
-                  onChange={() => toggleDoc(option)}
-                />{" "}
-                {option}
-              </label>
-            ))}
-          </div>
-          <div className="modal-foot">
-            <button
-              className="button button-ghost"
-              onClick={() => setDocumentsId(null)}
-            >
-              Cancel
-            </button>
-            <button
-              className="button button-primary"
-              disabled={selected.length === 0}
-              onClick={() => {
-                submitTransactionDocuments(docTx.id, selected);
-                setDocumentsId(null);
-              }}
-            >
-              <FileText size={15} /> Submit documents
-            </button>
-          </div>
-        </Modal>
-      )}
 
       {cancelId && (
         <PromptModal

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Check, Heart, MapPin, MessageCircle, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Check, Heart, MapPin, MessageCircle, Users } from "lucide-react";
 import { getListingStatus, isActiveListing, money, Property } from "@/lib/marketplace";
 
 export function PropertyDetailView({
@@ -20,8 +20,7 @@ export function PropertyDetailView({
   onContact: () => void;
   onReserve: () => void;
 }) {
-  const isVerified =
-    property.status === "PUBLISHED" || property.verificationStatus === "VERIFIED";
+  const isActive = isActiveListing(property);
 
   return (
     <main className="detail-view">
@@ -39,14 +38,8 @@ export function PropertyDetailView({
           />
           <div className="detail-copy">
             <div className="badge-row" style={{ position: "static" }}>
-              {isVerified && (
-                <span className="badge badge-verified">
-                  <Check size={12} /> YuTara verified
-                </span>
-              )}
-              <span
-                className={`badge badge-status ${getListingStatus(property).toLowerCase()}`}
-              >
+              <span className="badge badge-status">
+                <Users size={12} />
                 {getListingStatus(property).replaceAll("_", " ")}
               </span>
               {property.promoted && (
@@ -82,10 +75,10 @@ export function PropertyDetailView({
                 <p className="status-message">
                   This is your listing. Manage it from your seller workspace.
                 </p>
-              ) : isActiveListing(property) ? (
+              ) : isActive ? (
                 <>
                   <button className="button button-primary" onClick={onReserve}>
-                    Reserve property
+                    Transact via agency
                   </button>
                   <button className="button button-ghost" onClick={onContact}>
                     <MessageCircle size={16} /> Contact seller
@@ -97,7 +90,7 @@ export function PropertyDetailView({
                     ? "This listing is currently closed and is not accepting new inquiries."
                     : getListingStatus(property) === "SOLD"
                       ? "This property has been sold and is no longer available."
-                      : "This listing has been terminated by YuTara and is no longer available."}
+                      : "This listing has been terminated and is no longer available."}
                 </p>
               )}
               <button className="button button-ghost" onClick={onSave}>
@@ -107,30 +100,32 @@ export function PropertyDetailView({
             </div>
             <div className="verification-box">
               <h3>
-                <ShieldCheck
+                <Users
                   size={18}
                   style={{ verticalAlign: "-4px", marginRight: 6 }}
                 />
-                YuTara verification
+                Agency-managed transaction
               </h3>
               <ul>
                 <li>
-                  <Check size={14} /> Seller identity reviewed
+                  <Check size={14} /> Buyer requests through the agency
                 </li>
                 <li>
-                  <Check size={14} /> Required documents submitted
+                  <Check size={14} /> Agency reviews and holds payment in escrow
                 </li>
                 <li>
-                  <Check size={14} /> Property information reviewed
+                  <Check size={14} /> Agency prepares transfer documents
                 </li>
                 <li>
-                  <Check size={14} /> Listing requirements met
+                  <Check size={14} /> Both parties sign through the agency
+                </li>
+                <li>
+                  <Check size={14} /> Agency releases funds and records transfer
                 </li>
               </ul>
               <p style={{ fontSize: ".74rem", marginBottom: 0 }}>
-                Verification ID: YT-2026-{String(property.id).padStart(6, "0")}.
                 Buyers should conduct appropriate legal and government due
-                diligence.
+                diligence before completing a purchase.
               </p>
             </div>
           </div>

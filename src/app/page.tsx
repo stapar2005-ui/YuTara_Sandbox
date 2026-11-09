@@ -12,7 +12,6 @@ import {
   Menu,
   MessageCircle,
   Moon,
-  ShieldCheck,
   Sun,
   Users,
   X,
@@ -60,12 +59,11 @@ import {
   Property,
 } from "@/lib/marketplace";
 import { PromotedCarousel } from "@/components/PromotedCarousel";
-import { CertificationSection } from "@/components/CertificationSection";
 import { MarketplaceView } from "@/components/MarketplaceView";
 import { PropertyDetailView } from "@/components/PropertyDetailView";
 import { SellLandView, SellerTab } from "@/components/SellLandView";
 import { AdminView } from "@/components/AdminView";
-import { AdminTransactionVerifications } from "@/components/AdminTransactionVerifications";
+import { AgencyTransactionDesk } from "@/components/agency/AgencyTransactionDesk";
 import { Modal } from "@/components/Modal";
 
 type View = "home" | "marketplace" | "property" | "seller" | "admin";
@@ -107,7 +105,6 @@ export default function Home() {
   const [theme, setTheme] = useState<Theme>("light");
   const [query, setQuery] = useState("");
   const [type, setType] = useState("All types");
-  const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [sort, setSort] = useState("Recommended");
   const [barangay, setBarangay] = useState("All barangays");
   const [minPrice, setMinPrice] = useState("");
@@ -147,8 +144,8 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const stored = getStoredTheme();
+    const timer = window.setTimeout(async () => {
+      const stored = await getStoredTheme();
       applyTheme(stored);
       setTheme(stored);
     }, 0);
@@ -156,7 +153,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const syncSession = () => {
+    const syncSession = async () => {
       const next = getStoredSession();
       setSession(next);
       setView((current) => {
@@ -166,7 +163,10 @@ export default function Home() {
         return current;
       });
     };
-    const syncInquiries = () => setInquiries(readInquiries());
+    const syncInquiries = async () => {
+      const data = await readInquiries();
+      setInquiries(data);
+    };
     const loadSaved = () => {
       try {
         const raw = window.localStorage.getItem("yutara-saved");
@@ -197,7 +197,10 @@ export default function Home() {
   }, [theme]);
 
   useEffect(() => {
-    const sync = () => setProperties(readProperties());
+    const sync = async () => {
+      const data = await readProperties();
+      setProperties(data);
+    };
     const timer = window.setTimeout(sync, 0);
     window.addEventListener("storage", sync);
     return () => {
@@ -206,11 +209,11 @@ export default function Home() {
     };
   }, []);
 
-  const persistProperties = (
+  const persistProperties = async (
     updater: (current: Property[]) => Property[],
   ) => {
     const next = updater(properties);
-    const saved = writeProperties(next);
+    const saved = await writeProperties(next);
     setProperties(next);
     if (!saved) {
       setToast("Browser storage is full — this change may not be saved.");
@@ -219,10 +222,16 @@ export default function Home() {
   };
 
   useEffect(() => {
-    const sync = () => {
+    const sync = async () => {
       const email = getStoredSession()?.email ?? null;
-      setNotifications(notificationsFor(email, readProperties()));
-      setProfile(email ? readProfile(email) : {});
+      const props = await readProperties();
+      setNotifications(await notificationsFor(email, props));
+      if (email) {
+        const prof = await readProfile(email);
+        setProfile(prof);
+      } else {
+        setProfile({});
+      }
     };
     const timer = window.setTimeout(sync, 0);
     window.addEventListener("storage", sync);
@@ -300,8 +309,7 @@ export default function Home() {
         (type === "All types" || (property.type || property.propertyType) === type) &&
         (barangay === "All barangays" || property.barangay === barangay) &&
         (!minPrice || property.price >= Number(minPrice)) &&
-        (!maxPrice || property.price <= Number(maxPrice)) &&
-        (!verifiedOnly || property.status === "PUBLISHED" || property.verificationStatus === "VERIFIED")
+        (!maxPrice || property.price <= Number(maxPrice))
       );
     });
     return [...next].sort((a, b) =>
@@ -319,7 +327,6 @@ export default function Home() {
     barangay,
     minPrice,
     maxPrice,
-    verifiedOnly,
     sort,
     publicProperties,
   ]);
@@ -344,7 +351,7 @@ export default function Home() {
     go("marketplace");
   };
 
-  const submitProperty = (documents: Record<string, string>) => {
+  const submitProperty = () => {
     const created: Property = {
       id: Date.now(),
       title: form.title.trim() || "New property submission",
@@ -358,22 +365,16 @@ export default function Home() {
       generalAddress: "General location available upon inquiry",
       price: Number(form.price) || 0,
       area: Number(form.area) || 0,
-      description: form.description.trim() || "Submitted for YuTara review.",
-      status: "UNDER_REVIEW",
-      verificationStatus: "UNDER_REVIEW",
-      listingStatus: "CLOSED",
+      description: form.description.trim() || "New land listing.",
+      listingStatus: "OPEN_FOR_OFFERS",
       seller: "You",
       sellerEmail: session?.email,
       roadAccess: "BARANGAY_ROAD",
       latitude: 7.308,
       longitude: 125.684,
-      verificationDate: "",
-      verificationId: `YT-2026-${String(Date.now()).slice(-6)}`,
       image:
         form.image ||
         "https://images.unsplash.com/photo-1500534623283-312aade485b7?auto=format&fit=crop&w=900&q=80",
-      submittedDocuments: Object.values(documents).filter(Boolean),
-      submitted: "Just now",
     };
     persistProperties((current) => [created, ...current]);
     setForm({
@@ -385,7 +386,7 @@ export default function Home() {
       description: "",
       image: "",
     });
-    setToast("Listing submitted for YuTara verification");
+    setToast("Listing published to the marketplace");
     setTimeout(() => setToast(""), 2600);
     setSellerTab("listings");
     go("seller");
@@ -405,7 +406,13 @@ export default function Home() {
       <header className={`topbar ${headerHidden ? "topbar-hidden" : ""}`}>
         <div className="container nav">
           <button
-            onClick={() => go("home")}
+            onClick={() => {
+              if (session) {
+                router.push("/dashboard");
+                return;
+              }
+              go("home");
+            }}
             style={{ border: 0, background: "none", padding: 0 }}
           >
             <Logo />
@@ -431,10 +438,10 @@ export default function Home() {
           <div className="nav-actions">
             {!session && (
               <span className="nav-auth">
-                <a className="button button-ghost" href="/login">
+                <a className="button button-primary" href="/login">
                   Login
                 </a>
-                <a className="button button-primary" href="/register">
+                <a className="button button-ghost" href="/register">
                   Register
                 </a>
               </span>
@@ -461,6 +468,22 @@ export default function Home() {
                   onClick={() => setAccountMenuOpen(!accountMenuOpen)}
                 >
                   <CircleUserRound size={19} />
+                </button>
+                <button
+                  className="button button-danger"
+                  onClick={() => {
+                    clearStoredSession();
+                    setStoredTheme("light");
+                    setTheme("light");
+                    setSession(null);
+                    setAccountMenuOpen(false);
+                    setSelected(null);
+                    setSellerTab("listings");
+                    setView("home");
+                    router.push("/");
+                  }}
+                >
+                  Logout
                 </button>
                 {accountMenuOpen && (
                   <div className="account-menu" role="menu">
@@ -577,7 +600,10 @@ export default function Home() {
                 <Link href="/login" onClick={() => setMobileNavOpen(false)}>
                   Login
                 </Link>
-                <Link href="/register" onClick={() => setMobileNavOpen(false)}>
+                <Link
+                  href="/register"
+                  onClick={() => setMobileNavOpen(false)}
+                >
                   Register
                 </Link>
               </>
@@ -596,8 +622,8 @@ export default function Home() {
                 <em>YuTara.</em>
               </h1>
               <p>
-                Find verified land in Panabo City with confidence. YuTara is
-                starting local to build trust before expanding with care.
+                Find land in Panabo City with confidence. YuTara connects
+                buyers and sellers through a trusted local marketplace.
               </p>
               <div className="hero-actions">
                 <button
@@ -609,11 +635,12 @@ export default function Home() {
               </div>
               <div className="hero-note">
                 <span className="seal">
-                  <ShieldCheck size={17} />
+                  <Users size={17} />
                 </span>
                 <span>
-                  <strong>Verification-first.</strong> Better questions before
-                  bigger decisions.
+                  <strong>Agency-powered transactions.</strong> The partner
+                  agency handles escrow, documents, and the transfer from
+                  listing to closing.
                 </span>
               </div>
             </div>
@@ -626,25 +653,25 @@ export default function Home() {
                   <h2 className="display">Trust, made visible.</h2>
                 </div>
                 <p>
-                  We make the review journey legible, so you can spend less time
-                  wondering and more time deciding.
+                  Listings go live directly to the marketplace. The partner
+                  agency coordinates escrow, documents, and the transfer from
+                  listing to closing.
                 </p>
               </div>
               <div className="trust-grid">
                 <div className="trust-card">
-                  <FileCheck2 className="trust-icon" />
-                  <h3>Verified listings</h3>
+                  <Users className="trust-icon" />
+                  <h3>Direct connection</h3>
                   <p>
-                    Every published property passes YuTara&apos;s internal
-                    review process.
+                    Ask the seller your next question from the listing itself.
                   </p>
                 </div>
                 <div className="trust-card">
-                  <Users className="trust-icon" />
-                  <h3>Trusted sellers</h3>
+                  <FileCheck2 className="trust-icon" />
+                  <h3>Agency-managed escrow</h3>
                   <p>
-                    Seller information and required submission details are
-                    reviewed.
+                    Funds are held by the partner agency until the transfer is
+                    complete.
                   </p>
                 </div>
                 <div className="trust-card">
@@ -657,9 +684,10 @@ export default function Home() {
                 </div>
                 <div className="trust-card">
                   <MessageCircle className="trust-icon" />
-                  <h3>Direct connection</h3>
+                  <h3>Agency coordination</h3>
                   <p>
-                    Ask the seller your next question from the listing itself.
+                    The partner agency handles the buy and sell transaction from
+                    start to finish.
                   </p>
                 </div>
               </div>
@@ -684,8 +712,6 @@ export default function Home() {
                 properties={publicProperties.filter(
                   (property) =>
                     isPromotionActive(property) &&
-                    (property.status === "PUBLISHED" ||
-                      property.verificationStatus === "VERIFIED") &&
                     getListingStatus(property) === "OPEN_FOR_OFFERS",
                 )}
                 saved={saved}
@@ -719,8 +745,6 @@ export default function Home() {
           setMinPrice={setMinPrice}
           maxPrice={maxPrice}
           setMaxPrice={setMaxPrice}
-          verifiedOnly={verifiedOnly}
-          setVerifiedOnly={setVerifiedOnly}
           sort={sort}
           setSort={setSort}
           filtered={filtered}
@@ -776,7 +800,10 @@ export default function Home() {
           form={form}
           setForm={setForm}
           onSubmit={submitProperty}
-          onReply={(id, reply) => setInquiries(replyToInquiry(id, reply))}
+          onReply={async (id, reply) => {
+            const updated = await replyToInquiry(id, reply);
+            setInquiries(updated);
+          }}
           onBack={() => go("marketplace")}
         />
       )}
@@ -784,94 +811,49 @@ export default function Home() {
         <>
           <AdminView
             properties={properties}
-          onApprove={(id) => {
-            const item = properties.find((property) => property.id === id);
-            if (!item || !isWithinServiceArea(item.city, item.province)) {
-              setToast("Location outside current service area");
+            onSetListingStatus={(id, listingStatus, terminationReason) => {
+              persistProperties((items) =>
+                items.map((item) =>
+                  item.id === id
+                    ? {
+                        ...item,
+                        listingStatus,
+                        terminationReason,
+                        terminatedBy:
+                          listingStatus === "TERMINATED"
+                            ? session?.email
+                            : undefined,
+                        terminatedAt:
+                          listingStatus === "TERMINATED"
+                            ? new Date().toISOString()
+                            : undefined,
+                        promoted:
+                          listingStatus === "OPEN_FOR_OFFERS"
+                            ? item.promoted
+                            : false,
+                      }
+                    : item,
+                ),
+              );
+              setToast(
+                listingStatus === "TERMINATED"
+                  ? "Property terminated successfully"
+                  : `Property marked ${listingStatus.replaceAll("_", " ").toLowerCase()}`,
+              );
               setTimeout(() => setToast(""), 2500);
-              return;
-            }
-            persistProperties((items) =>
-              items.map((prop) =>
-                prop.id === id
-                  ? {
-                      ...prop,
-                      status: "PUBLISHED",
-                      verificationStatus: "VERIFIED",
-                      listingStatus: "OPEN_FOR_OFFERS",
-                    }
-                  : prop,
-              ),
-            );
-            setToast("Property approved and published");
-            setTimeout(() => setToast(""), 2500);
-          }}
-          onSetListingStatus={(id, listingStatus, terminationReason) => {
-            persistProperties((items) =>
-              items.map((item) =>
-                item.id === id
-                  ? {
-                      ...item,
-                      listingStatus,
-                      terminationReason,
-                      terminatedBy:
-                        listingStatus === "TERMINATED"
-                          ? session?.email
-                          : undefined,
-                      terminatedAt:
-                        listingStatus === "TERMINATED"
-                          ? new Date().toISOString()
-                          : undefined,
-                      promoted:
-                        listingStatus === "OPEN_FOR_OFFERS"
-                          ? item.promoted
-                          : false,
-                    }
-                  : item,
-              ),
-            );
-            setToast(
-              listingStatus === "TERMINATED"
-                ? "Property terminated successfully"
-                : `Property marked ${listingStatus.replaceAll("_", " ").toLowerCase()}`,
-            );
-            setTimeout(() => setToast(""), 2500);
-          }}
-          onSetVerification={(id, status, note) => {
-            persistProperties((items) =>
-              items.map((item) =>
-                item.id === id
-                  ? {
-                      ...item,
-                      status,
-                      verificationStatus: status,
-                      listingStatus: "CLOSED",
-                      terminationReason:
-                        status === "REJECTED" ? note : item.terminationReason,
-                    }
-                  : item,
-              ),
-            );
-            setToast(
-              status === "REJECTED"
-                ? "Submission rejected and seller notified"
-                : "Correction requested from seller",
-            );
-            setTimeout(() => setToast(""), 2500);
-          }}
+            }}
           />
           <section className="section">
             <div className="container">
-              <div className="eyebrow">Transaction verification</div>
+              <div className="eyebrow">Agency transactions</div>
               <h2 className="display">
-                Bookings awaiting document verification
+                Bookings handled by the partner agency
               </h2>
-              <AdminTransactionVerifications />
+              <AgencyTransactionDesk />
             </div>
           </section>
         </>
       )}
-      {view === "home" && <CertificationSection />}
       <footer className="footer">
         <div className="container footer-inner">
           <div>
@@ -909,9 +891,9 @@ export default function Home() {
             </button>
             <button
               className="button button-primary"
-              onClick={() => {
+              onClick={async () => {
                 if (selected) {
-                  addInquiry({
+                  await addInquiry({
                     propertyId: selected.id,
                     propertyTitle: selected.title,
                     buyerName: session?.name || "YuTara buyer",
@@ -920,7 +902,8 @@ export default function Home() {
                       inquiryMessage.trim() ||
                       "I am interested in this property.",
                   });
-                  setInquiries(readInquiries());
+                  const updated = await readInquiries();
+                  setInquiries(updated);
                 }
                 setInquiryOpen(false);
                 setToast("Inquiry sent successfully");

@@ -19,8 +19,6 @@ export function MarketplaceView({
   setMinPrice,
   maxPrice,
   setMaxPrice,
-  verifiedOnly,
-  setVerifiedOnly,
   sort,
   setSort,
   filtered,
@@ -39,8 +37,6 @@ export function MarketplaceView({
   setMinPrice: (value: string) => void;
   maxPrice: string;
   setMaxPrice: (value: string) => void;
-  verifiedOnly: boolean;
-  setVerifiedOnly: (value: boolean) => void;
   sort: string;
   setSort: (value: string) => void;
   filtered: Property[];
@@ -176,16 +172,6 @@ export function MarketplaceView({
                 />
               </div>
             </div>
-            <div className="filter-group">
-              <label className="check-label">
-                <input
-                  type="checkbox"
-                  checked={verifiedOnly}
-                  onChange={(event) => setVerifiedOnly(event.target.checked)}
-                />{" "}
-                Verified only
-              </label>
-            </div>
             <button
               className="button button-ghost"
               onClick={() => {
@@ -194,7 +180,6 @@ export function MarketplaceView({
                 setBarangay("All barangays");
                 setMinPrice("");
                 setMaxPrice("");
-                setVerifiedOnly(false);
               }}
             >
               Clear all
@@ -225,8 +210,6 @@ export function MarketplaceView({
                 properties={filtered.filter(
                   (property) =>
                     isPromotionActive(property) &&
-                    (property.status === "PUBLISHED" ||
-                      property.verificationStatus === "VERIFIED") &&
                     getListingStatus(property) === "OPEN_FOR_OFFERS",
                 )}
                 saved={saved}
@@ -236,7 +219,7 @@ export function MarketplaceView({
             </section>
             <div className="results-top">
               <span className="muted">
-                {filtered.length} verified Panabo City properties
+                {filtered.length} Panabo City properties
               </span>
               <select
                 value={sort}
@@ -256,10 +239,9 @@ export function MarketplaceView({
                       <div className="eyebrow">YuTara Promoted</div>
                       <h2 className="display">Promoted lands</h2>
                     </div>
-                    <p>
-                      Seller-promoted listings placed above recommendations.
-                      Promotion does not bypass verification.
-                    </p>
+                      <p>
+                        Seller-promoted listings placed above recommendations.
+                      </p>
                   </div>
                   {renderCards(promoted)}
                 </section>

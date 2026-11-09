@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
-  BadgeCheck,
   FileCheck2,
   Inbox,
   MapPin,
@@ -60,12 +59,6 @@ async function resizeImage(file: File): Promise<string> {
   });
 }
 
-function statusClass(status: Property["status"]): string {
-  if (status === "PUBLISHED" || status === "VERIFIED") return "verified";
-  if (status === "NEEDS_CORRECTION") return "correction";
-  return "review";
-}
-
 export function SellLandView({
   properties,
   inquiries,
@@ -85,12 +78,11 @@ export function SellLandView({
   sellerEmail: string;
   form: SellForm;
   setForm: (value: SellForm) => void;
-  onSubmit: (documents: Record<string, string>) => void;
+  onSubmit: () => void;
   onReply: (id: string, reply: string) => void;
   onBack: () => void;
 }) {
   const [step, setStep] = useState(1);
-  const [documents, setDocuments] = useState<Record<string, string>>({});
   const [declaration, setDeclaration] = useState(false);
   const [validationError, setValidationError] = useState("");
   const [openListingId, setOpenListingId] = useState<number | null>(null);
@@ -98,14 +90,7 @@ export function SellLandView({
   const [replies, setReplies] = useState<Record<string, string>>({});
 
   const activeCount = properties.filter(
-    (item) =>
-      item.status === "PUBLISHED" || item.verificationStatus === "VERIFIED",
-  ).length;
-  const reviewCount = properties.filter(
-    (item) => item.status === "UNDER_REVIEW",
-  ).length;
-  const correctionCount = properties.filter(
-    (item) => item.status === "NEEDS_CORRECTION",
+    (item) => item.listingStatus === "OPEN_FOR_OFFERS",
   ).length;
 
   const inquiryMap = useMemo(() => {
@@ -145,6 +130,10 @@ export function SellLandView({
       setValidationError("Please enter a description for the property.");
       return false;
     }
+    if (!form.image) {
+      setValidationError("Please upload a property photo. Listings require a photo to go live.");
+      return false;
+    }
     setValidationError("");
     return true;
   };
@@ -160,10 +149,9 @@ export function SellLandView({
       return;
     }
     if (!declaration) return;
-    onSubmit(documents);
+    onSubmit();
     setStep(1);
     setDeclaration(false);
-    setDocuments({});
   };
 
   const handleReply = (id: string, reply: string) => {
@@ -195,14 +183,6 @@ export function SellLandView({
           <div className="stat">
             <span>Active listings</span>
             <strong>{activeCount}</strong>
-          </div>
-          <div className="stat">
-            <span>Under review</span>
-            <strong>{reviewCount}</strong>
-          </div>
-          <div className="stat">
-            <span>Needs correction</span>
-            <strong>{correctionCount}</strong>
           </div>
           <div className="stat">
             <span>New inquiries</span>
@@ -254,8 +234,8 @@ export function SellLandView({
                 <FileCheck2 size={26} />
                 <h3>You have no land listed yet</h3>
                 <p className="muted">
-                  Submit your first property and it will appear here with its
-                  review status and buyer inquiries.
+                  Submit your first property and it will appear here with buyer
+                  inquiries.
                 </p>
                 <button
                   className="button button-primary"
@@ -295,10 +275,8 @@ export function SellLandView({
                         />
                         <div className="seller-listing-body">
                           <div className="badge-row">
-                            <span
-                              className={`status ${statusClass(property.status)}`}
-                            >
-                              {property.status.replace("_", " ")}
+                            <span className="status">
+                              {property.listingStatus.replaceAll("_", " ")}
                             </span>
                             {property.promoted && (
                               <span className="badge badge-promoted">
@@ -319,24 +297,6 @@ export function SellLandView({
                               {property.area.toLocaleString()} sqm
                             </span>
                           </div>
-                          {property.status === "UNDER_REVIEW" && (
-                            <p
-                              className="muted"
-                              style={{ fontSize: ".76rem", marginTop: 6 }}
-                            >
-                              Awaiting YuTara verification. It becomes visible in
-                              the marketplace once approved.
-                            </p>
-                          )}
-                          {property.status === "NEEDS_CORRECTION" && (
-                            <p
-                              className="muted"
-                              style={{ fontSize: ".76rem", marginTop: 6 }}
-                            >
-                              A correction was requested. Update the details or
-                              documents and submit again.
-                            </p>
-                          )}
                           <button
                             className="button button-ghost card-action"
                             onClick={() =>
@@ -398,7 +358,7 @@ export function SellLandView({
                                 {isReplied ? (
                                   <div>
                                     <span className="badge badge-verified">
-                                      <BadgeCheck size={12} /> Replied
+                                      <FileCheck2 size={12} /> Replied
                                     </span>
                                     {inquiry.reply && (
                                       <p
@@ -464,17 +424,18 @@ export function SellLandView({
           <>
             <div className="section-heading">
               <div>
-                <div className="eyebrow">New submission</div>
+                <div className="eyebrow">New listing</div>
                 <h2 className="display">Tell us about the land.</h2>
               </div>
               <p>
-                Submissions are never published automatically. YuTara reviews the
-                information and documents first.
+                Your listing is published to the marketplace right away. The
+                partner agency will coordinate the transaction when a buyer is
+                ready.
               </p>
             </div>
             <div className="table-wrap" style={{ padding: 22 }}>
               <div className="sell-stepper">
-                {["Property", "Ownership", "Documents", "Review"].map(
+                {["Property", "Details", "Review"].map(
                   (label, index) => (
                     <button
                       key={label}
@@ -578,14 +539,6 @@ export function SellLandView({
                     inputMode="numeric"
                   />
                 </label>
-                <label>
-                  Required documents
-                  <input
-                    className="form-input"
-                    value="Ownership document, tax declaration, seller ID"
-                    readOnly
-                  />
-                </label>
                 <label style={{ gridColumn: "1 / -1" }}>
                   Description
                   <textarea
@@ -611,8 +564,8 @@ export function SellLandView({
                     }}
                   />
                   <span className="muted" style={{ fontSize: ".76rem" }}>
-                    Add a clear photo of the land. This is what buyers see in the
-                    marketplace.
+                    Add a clear photo of the land. This is what buyers see in
+                    the marketplace.
                   </span>
                 </label>
                 {form.image && (
@@ -654,20 +607,6 @@ export function SellLandView({
                       <option>Other</option>
                     </select>
                   </label>
-                  <label>
-                    Tax declaration reference
-                    <input
-                      className="form-input"
-                      placeholder="Reference number, if applicable"
-                    />
-                  </label>
-                  <label>
-                    Other registered owners
-                    <input
-                      className="form-input"
-                      placeholder="List co-owners, if any"
-                    />
-                  </label>
                   <label style={{ gridColumn: "1 / -1" }}>
                     Ownership notes
                     <textarea
@@ -675,97 +614,9 @@ export function SellLandView({
                       placeholder="Share relevant authority, succession, or co-ownership context."
                     />
                   </label>
-                  <div
-                    className="verification-box"
-                    style={{ gridColumn: "1 / -1" }}
-                  >
-                    <strong>Accurate information matters.</strong>
-                    <p style={{ margin: "6px 0 0", fontSize: ".8rem" }}>
-                      YuTara reviews submissions internally but does not legally
-                      validate ownership or transfer title.
-                    </p>
-                  </div>
                 </div>
               )}
               {step === 3 && (
-                <div className="document-list">
-                  <div className="verification-box">
-                    <strong>What you need for verification</strong>
-                    <p style={{ margin: "6px 0 0", fontSize: ".82rem" }}>
-                      Upload clear, readable copies (PDF or a photo). YuTara
-                      reviews these to confirm the registered owner, the lot, and
-                      the land area before your listing can go live. Required
-                      documents are marked below.
-                    </p>
-                  </div>
-                  {[
-                    {
-                      key: "title",
-                      name: "Certificate of Title",
-                      description:
-                        "Your land's ownership title (TCT/OCT). We check the registered owner's name, the lot number, and the area so your listing matches the documents.",
-                      required: true,
-                    },
-                    {
-                      key: "tax",
-                      name: "Tax Declaration",
-                      description:
-                        "The latest tax declaration from the City Assessor's Office. It confirms the assessed value and the property's barangay and lot number.",
-                      required: true,
-                    },
-                    {
-                      key: "seller_id",
-                      name: "Valid government ID",
-                      description:
-                        "Your own valid ID (for example a driver's license, passport, or national ID) to confirm you are the person listing the land.",
-                      required: true,
-                    },
-                    {
-                      key: "authority",
-                      name: "Authority to Sell",
-                      description:
-                        "Only if someone other than the registered owner is listing the land. It authorizes them to sell on the owner's behalf.",
-                      required: false,
-                    },
-                    {
-                      key: "supporting",
-                      name: "Supporting property record",
-                      description:
-                        "Optional. Any extra record that clarifies the property, such as a sketch plan, survey, or a previous deed.",
-                      required: false,
-                    },
-                  ].map((document) => (
-                    <div className="document-card" key={document.key}>
-                      <div>
-                        <strong>{document.name}</strong>
-                        <p>{document.description}</p>
-                        <span className="document-label">
-                          {document.required
-                            ? "Required for YuTara review"
-                            : "Optional"}
-                        </span>
-                      </div>
-                      <label className="upload-button">
-                        <input
-                          type="file"
-                          accept=".pdf,.jpg,.jpeg,.png"
-                          onChange={(event) =>
-                            setDocuments({
-                              ...documents,
-                              [document.key]:
-                                event.target.files?.[0]?.name || "",
-                            })
-                          }
-                        />
-                        {documents[document.key]
-                          ? `✓ ${documents[document.key]}`
-                          : "Upload document"}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {step === 4 && (
                 <div className="review-panel">
                   <div className="review-row">
                     <span>Property</span>
@@ -784,25 +635,17 @@ export function SellLandView({
                       {form.area || "0"} sqm
                     </strong>
                   </div>
-                  <div className="verification-box">
-                    <strong>Document requirements may vary.</strong>
-                    <p style={{ margin: "6px 0", fontSize: ".8rem" }}>
-                      YuTara&apos;s internal review does not replace legal
-                      advice, government verification, or professional
-                      conveyancing services.
-                    </p>
-                    <label className="check-label">
-                      <input
-                        type="checkbox"
-                        checked={declaration}
-                        onChange={(event) =>
-                          setDeclaration(event.target.checked)
-                        }
-                      />{" "}
-                      I confirm the information is accurate to the best of my
-                      knowledge.
-                    </label>
-                  </div>
+                  <label className="check-label">
+                    <input
+                      type="checkbox"
+                      checked={declaration}
+                      onChange={(event) =>
+                        setDeclaration(event.target.checked)
+                      }
+                    />{" "}
+                    I confirm the information is accurate to the best of my
+                    knowledge.
+                  </label>
                 </div>
               )}
               <div
@@ -815,10 +658,7 @@ export function SellLandView({
                   flexWrap: "wrap",
                 }}
               >
-                <div
-                  className="verification-box"
-                  style={{ margin: "0 0 20px", gridColumn: "1 / -1" }}
-                >
+                <div className="verification-box" style={{ margin: "0 0 20px", gridColumn: "1 / -1" }}>
                   <strong>
                     YuTara currently accepts property listings located within
                     Panabo City only.
@@ -828,10 +668,6 @@ export function SellLandView({
                     Panabo City, Davao del Norte.
                   </p>
                 </div>
-                <span className="muted" style={{ fontSize: ".8rem" }}>
-                  <FileCheck2 size={14} style={{ verticalAlign: "-3px" }} />{" "}
-                  Your documents are stored securely and used only for review.
-                </span>
                 {step > 1 && (
                   <button
                     className="button button-ghost"
@@ -840,7 +676,7 @@ export function SellLandView({
                     Back
                   </button>
                 )}
-                {step < 4 ? (
+                {step < 3 ? (
                   <button
                     className="button button-primary"
                     onClick={handleNextStep}
@@ -853,7 +689,7 @@ export function SellLandView({
                     onClick={handleSubmit}
                     disabled={!declaration}
                   >
-                    Submit for verification <ArrowRight size={15} />
+                    Publish listing <ArrowRight size={15} />
                   </button>
                 )}
               </div>

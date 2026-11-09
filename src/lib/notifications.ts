@@ -12,20 +12,20 @@ export type NotificationCounts = {
  * Notifications for a seller: new buyer inquiries and new booking requests on
  * the listings this account owns.
  */
-export function notificationsFor(
+export async function notificationsFor(
   email: string | null | undefined,
   properties: Property[],
-): NotificationCounts {
+): Promise<NotificationCounts> {
   if (!email) return { inquiries: 0, bookings: 0, total: 0 };
   const myIds = new Set(
     properties
       .filter((property) => property.sellerEmail === email)
       .map((property) => property.id),
   );
-  const inquiries = readInquiries().filter(
+  const inquiries = (await readInquiries()).filter(
     (inquiry) => inquiry.status === "NEW" && myIds.has(inquiry.propertyId),
   ).length;
-  const bookings = readTransactions().filter(
+  const bookings = (await readTransactions()).filter(
     (tx) => tx.sellerId === email && tx.stage === "BOOKING_REQUESTED",
   ).length;
   return { inquiries, bookings, total: inquiries + bookings };

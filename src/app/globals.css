@@ -86,7 +86,7 @@ button {
   overflow-x: clip;
 }
 .container {
-  width: min(1260px, calc(100% - 32px));
+  width: min(1260px, calc(100% - 40px));
   margin: 0 auto;
 }
 .display {
@@ -565,7 +565,7 @@ button {
 }
 
 .marketplace {
-  padding: 42px 0 90px;
+  padding: 42px 20px 90px;
 }
 .market-header {
   display: flex;
@@ -666,7 +666,7 @@ button {
 }
 
 .map-page {
-  padding: 48px 0 90px;
+  padding: 48px 20px 90px;
 }
 .map-heading,
 .dashboard-heading {
@@ -802,7 +802,7 @@ button {
 .dashboard-note h3 { display: flex; align-items: center; gap: 7px; color: var(--forest); }
 
 .detail-view {
-  padding: 52px 0 90px;
+  padding: 52px 20px 90px;
 }
 .back-button {
   color: var(--muted);
@@ -887,7 +887,7 @@ button {
 }
 
 .workspace {
-  padding: 45px 0 90px;
+  padding: 45px 20px 90px;
 }
 .workspace h1 {
   font-size: 3.4rem;
@@ -1782,7 +1782,7 @@ button {
 }
 @media (max-width: 560px) {
   .container {
-    width: min(100% - 28px, 1180px);
+    width: min(100% - 32px, 1180px);
   }
   .brand-logo {
     width: 116px;

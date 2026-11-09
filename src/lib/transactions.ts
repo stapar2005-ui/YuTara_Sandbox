@@ -1,15 +1,19 @@
 import { MarketplaceProperty } from "./marketplace";
 import { Reservation } from "./reservation-service";
+import { SupabaseAdapter } from "./storage-adapter";
+import { supabase } from "./supabase";
 
 export type TransactionStage =
   | "BOOKING_REQUESTED"
-  | "DOCUMENTS_REQUESTED"
-  | "DOCUMENTS_SUBMITTED"
-  | "VERIFIED"
+  | "AGENCY_REVIEW"
+  | "PAYMENT_HELD"
+  | "DOCUMENTS_PREPARED"
+  | "PARTIES_SIGNED"
+  | "FUNDS_RELEASED"
   | "COMPLETED"
   | "CANCELLED";
 
-export type TransactionActor = "BUYER" | "SELLER" | "YUTARA" | "SYSTEM";
+export type TransactionActor = "BUYER" | "SELLER" | "AGENCY" | "SYSTEM";
 
 export type PaymentRecord = {
   id: string;
@@ -45,9 +49,12 @@ export type Transaction = {
   reservationFee: number;
   balance: number;
   escrowHeld: number;
+  agencyFee: number;
   stage: TransactionStage;
   payments: PaymentRecord[];
-  documents: string[];
+  documentsPrepared: string[];
+  signedBy: string[];
+  fundsReleasedAt?: string;
   events: TransactionEvent[];
   createdAt: string;
   updatedAt: string;
@@ -58,47 +65,43 @@ export const TRANSACTIONS_EVENT = "yutara-transactions-change";
 
 export const STAGE_ORDER: TransactionStage[] = [
   "BOOKING_REQUESTED",
-  "DOCUMENTS_REQUESTED",
-  "DOCUMENTS_SUBMITTED",
-  "VERIFIED",
+  "AGENCY_REVIEW",
+  "PAYMENT_HELD",
+  "DOCUMENTS_PREPARED",
+  "PARTIES_SIGNED",
+  "FUNDS_RELEASED",
   "COMPLETED",
 ];
 
 export const STAGE_LABEL: Record<TransactionStage, string> = {
   BOOKING_REQUESTED: "Booking requested",
-  DOCUMENTS_REQUESTED: "Documents requested",
-  DOCUMENTS_SUBMITTED: "Documents submitted",
-  VERIFIED: "Verified by YuTara",
+  AGENCY_REVIEW: "Agency review",
+  PAYMENT_HELD: "Payment held in escrow",
+  DOCUMENTS_PREPARED: "Documents prepared",
+  PARTIES_SIGNED: "Parties signed",
+  FUNDS_RELEASED: "Funds released",
   COMPLETED: "Transaction complete",
   CANCELLED: "Cancelled",
 };
-
-/** Documents the buyer is asked to provide for verification. */
-export const BUYER_DOCUMENT_OPTIONS = [
-  "Valid government ID",
-  "Proof of funds / bank statement",
-  "Signed letter of intent",
-  "Proof of billing / address",
-];
 
 const VALID_STAGES: TransactionStage[] = [
   ...STAGE_ORDER,
   "CANCELLED",
 ];
 
+const storage = new SupabaseAdapter(supabase, TRANSACTIONS_KEY);
+
 function emit(): void {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new Event(TRANSACTIONS_EVENT));
 }
 
-export function readTransactions(): Transaction[] {
+export async function readTransactions(): Promise<Transaction[]> {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(TRANSACTIONS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed
+    const stored = await storage.getItem<Transaction[]>(TRANSACTIONS_KEY);
+    if (!stored) return [];
+    return stored
       .filter(
         (item): item is Transaction =>
           Boolean(
@@ -112,22 +115,20 @@ export function readTransactions(): Transaction[] {
       )
       .map((item) => ({
         ...item,
-        documents: Array.isArray(item.documents) ? item.documents : [],
+        documentsPrepared: Array.isArray(item.documentsPrepared)
+          ? item.documentsPrepared
+          : [],
+        signedBy: Array.isArray(item.signedBy) ? item.signedBy : [],
       }));
   } catch {
     return [];
   }
 }
 
-function writeTransactions(transactions: Transaction[]): Transaction[] {
-  if (typeof window === "undefined") return transactions;
-  try {
-    window.localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(transactions));
-  } catch {
-    // ignore
-  }
+async function writeTransactions(transactions: Transaction[]): Promise<void> {
+  if (typeof window === "undefined") return;
+  await storage.setItem(TRANSACTIONS_KEY, transactions);
   emit();
-  return transactions;
 }
 
 function event(
@@ -149,19 +150,20 @@ function sellerIdFor(property: MarketplaceProperty): string {
 }
 
 /** Create the transaction as soon as the buyer books the land. */
-export function createTransactionFromReservation(input: {
+export async function createTransactionFromReservation(input: {
   reservation: Reservation;
   property: MarketplaceProperty;
   buyerName: string;
   sellerName?: string;
-}): Transaction {
+}): Promise<Transaction> {
   const { reservation, property } = input;
-  const existing = readTransactions().find(
+  const existing = (await readTransactions()).find(
     (tx) => tx.reservationId === reservation.id,
   );
   if (existing) return existing;
 
   const now = new Date().toISOString();
+  const agencyFee = Math.round(property.price * 0.025);
   const transaction: Transaction = {
     id: `YTR-TX-${String(Date.now()).slice(-6)}`,
     reservationId: reservation.id,
@@ -178,6 +180,7 @@ export function createTransactionFromReservation(input: {
     reservationFee: reservation.reservationFee,
     balance: Math.max(property.price - reservation.reservationFee, 0),
     escrowHeld: reservation.reservationFee,
+    agencyFee,
     stage: "BOOKING_REQUESTED",
     payments: [
       {
@@ -190,27 +193,29 @@ export function createTransactionFromReservation(input: {
         paidAt: now,
       },
     ],
-    documents: [],
+    documentsPrepared: [],
+    signedBy: [],
     events: [
       event("SYSTEM", "Booking requested", `Reservation ${reservation.id}`),
       event(
         "BUYER",
-        "Buyer requested to book this land",
-        "Awaiting the seller's agreement",
+        "Buyer requested to book this land through the agency",
+        "Awaiting agency review",
       ),
     ],
     createdAt: now,
     updatedAt: now,
   };
-  writeTransactions([transaction, ...readTransactions()]);
+  const all = await readTransactions();
+  await writeTransactions([transaction, ...all]);
   return transaction;
 }
 
-function updateTransaction(
+async function updateTransaction(
   id: string,
   updater: (tx: Transaction) => Transaction,
-): Transaction | null {
-  const transactions = readTransactions();
+): Promise<Transaction | null> {
+  const transactions = await readTransactions();
   const index = transactions.findIndex((tx) => tx.id === id);
   if (index < 0) return null;
   const updated: Transaction = {
@@ -218,16 +223,17 @@ function updateTransaction(
     updatedAt: new Date().toISOString(),
   };
   transactions[index] = updated;
-  writeTransactions(transactions);
+  await writeTransactions(transactions);
   return updated;
 }
 
 /** Record the reservation-fee payment once the buyer pays. */
-export function markBookingPaid(
+export async function markBookingPaid(
   reservationId: string,
   method: string,
-): Transaction | null {
-  const transaction = readTransactions().find(
+): Promise<Transaction | null> {
+  const transactions = await readTransactions();
+  const transaction = transactions.find(
     (tx) => tx.reservationId === reservationId,
   );
   if (!transaction) return null;
@@ -242,91 +248,170 @@ export function markBookingPaid(
   }));
 }
 
-export function acceptBooking(
+export async function agencyReview(
   id: string,
   actor: TransactionActor,
-  detail?: string,
-): Transaction | null {
+  decision: "APPROVED" | "REJECTED",
+  note?: string,
+): Promise<Transaction | null> {
   return updateTransaction(id, (tx) => {
     if (tx.stage !== "BOOKING_REQUESTED") return tx;
+    if (decision === "APPROVED") {
+      return {
+        ...tx,
+        stage: "AGENCY_REVIEW",
+        events: [
+          ...tx.events,
+          event(
+            actor,
+            "Agency accepted the booking",
+            note || "Booking accepted and under agency review",
+          ),
+        ],
+      };
+    }
     return {
       ...tx,
-      stage: "DOCUMENTS_REQUESTED",
+      stage: "CANCELLED",
       events: [
         ...tx.events,
         event(
           actor,
-          "Seller agreed to the transaction",
-          detail || "Documents requested from the buyer",
+          "Booking cancelled by agency",
+          note || "No reason provided",
         ),
       ],
     };
   });
 }
 
-export function submitTransactionDocuments(
+export async function holdPayment(
   id: string,
-  documents: string[],
-): Transaction | null {
+  actor: TransactionActor,
+  method: string,
+): Promise<Transaction | null> {
   return updateTransaction(id, (tx) => {
-    if (tx.stage !== "DOCUMENTS_REQUESTED") return tx;
+    if (tx.stage !== "AGENCY_REVIEW") return tx;
     return {
       ...tx,
-      stage: "DOCUMENTS_SUBMITTED",
-      documents,
+      stage: "PAYMENT_HELD",
+      payments: tx.payments.map((payment) =>
+        payment.label === "Reservation fee"
+          ? { ...payment, status: "PAID", method }
+          : payment,
+      ),
       events: [
         ...tx.events,
         event(
-          "BUYER",
-          "Buyer submitted documents",
-          `${documents.length} document(s) submitted for verification`,
+          actor,
+          "Reservation fee held in agency escrow",
+          `Payment method: ${method}`,
         ),
       ],
     };
   });
 }
 
-export function verifyTransaction(
+export async function prepareDocuments(
   id: string,
   actor: TransactionActor,
+  documents: string[],
   note?: string,
-): Transaction | null {
+): Promise<Transaction | null> {
   return updateTransaction(id, (tx) => {
-    if (tx.stage !== "DOCUMENTS_SUBMITTED") return tx;
+    if (tx.stage !== "PAYMENT_HELD") return tx;
+    if (!documents || documents.length === 0) return tx;
     return {
       ...tx,
-      stage: "VERIFIED",
+      stage: "DOCUMENTS_PREPARED",
+      documentsPrepared: documents,
       events: [
         ...tx.events,
-        event(actor, "Documents verified", note || "You may proceed to completion"),
+        event(
+          actor,
+          "Transfer documents prepared",
+          note || `${documents.length} document(s) prepared for signing`,
+        ),
       ],
     };
   });
 }
 
-export function completeTransaction(
+export async function recordSigning(
   id: string,
   actor: TransactionActor,
-): Transaction | null {
+  party: "BUYER" | "SELLER",
+): Promise<Transaction | null> {
   return updateTransaction(id, (tx) => {
-    if (tx.stage !== "VERIFIED") return tx;
+    if (tx.stage !== "DOCUMENTS_PREPARED") return tx;
+    if (tx.documentsPrepared.length === 0) return tx;
+    const alreadySigned = tx.signedBy.includes(party);
+    if (alreadySigned) return tx;
+    const nextSigned = [...tx.signedBy, party];
+    const nextStage =
+      nextSigned.length === 2 ? "PARTIES_SIGNED" : tx.stage;
     return {
       ...tx,
-      stage: "COMPLETED",
+      stage: nextStage,
+      signedBy: nextSigned,
+      events: [
+        ...tx.events,
+        event(
+          actor,
+          `${party.toLowerCase()} signed the transfer documents`,
+          nextSigned.length === 2
+            ? "Both parties have signed. Ready for funds release."
+            : "Awaiting the other party's signature.",
+        ),
+      ],
+    };
+  });
+}
+
+export async function releaseFunds(
+  id: string,
+  actor: TransactionActor,
+): Promise<Transaction | null> {
+  return updateTransaction(id, (tx) => {
+    if (tx.stage !== "PARTIES_SIGNED") return tx;
+    return {
+      ...tx,
+      stage: "FUNDS_RELEASED",
+      fundsReleasedAt: new Date().toISOString(),
       payments: tx.payments.map((payment) => ({
         ...payment,
         status: payment.status === "PAID" ? "RELEASED" : payment.status,
       })),
-      events: [...tx.events, event(actor, "Transaction completed")],
+      events: [
+        ...tx.events,
+        event(actor, "Funds released to seller from escrow"),
+      ],
     };
   });
 }
 
-export function cancelTransaction(
+export async function completeTransaction(
+  id: string,
+  actor: TransactionActor,
+): Promise<Transaction | null> {
+  return updateTransaction(id, (tx) => {
+    if (tx.stage !== "FUNDS_RELEASED") return tx;
+    return {
+      ...tx,
+      stage: "COMPLETED",
+      events: [
+        ...tx.events,
+        event(actor, "Transaction completed by the agency"),
+      ],
+    };
+  });
+}
+
+export async function cancelTransaction(
   id: string,
   actor: TransactionActor,
   reason: string,
-): Transaction | null {
+): Promise<Transaction | null> {
   return updateTransaction(id, (tx) => {
     if (tx.stage === "COMPLETED") return tx;
     return {

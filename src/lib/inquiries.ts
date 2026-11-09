@@ -1,4 +1,6 @@
 import { MarketplaceProperty } from "./marketplace";
+import { SupabaseAdapter } from "./storage-adapter";
+import { supabase } from "./supabase";
 
 export type InquiryStatus = "NEW" | "REPLIED";
 
@@ -17,14 +19,14 @@ export type Inquiry = {
 export const INQUIRIES_KEY = "yutara-inquiries";
 export const INQUIRIES_EVENT = "yutara-inquiries-change";
 
-export function readInquiries(): Inquiry[] {
+const storage = new SupabaseAdapter(supabase, INQUIRIES_KEY);
+
+export async function readInquiries(): Promise<Inquiry[]> {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(INQUIRIES_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
+    const stored = await storage.getItem<Inquiry[]>(INQUIRIES_KEY);
+    if (!stored) return [];
+    return stored.filter(
       (item): item is Inquiry =>
         Boolean(
           item &&
@@ -39,24 +41,19 @@ export function readInquiries(): Inquiry[] {
   }
 }
 
-function writeInquiries(inquiries: Inquiry[]): Inquiry[] {
-  if (typeof window === "undefined") return inquiries;
-  try {
-    window.localStorage.setItem(INQUIRIES_KEY, JSON.stringify(inquiries));
-    window.dispatchEvent(new Event(INQUIRIES_EVENT));
-  } catch {
-    // ignore
-  }
-  return inquiries;
+async function writeInquiries(inquiries: Inquiry[]): Promise<void> {
+  if (typeof window === "undefined") return;
+  await storage.setItem(INQUIRIES_KEY, inquiries);
+  window.dispatchEvent(new Event(INQUIRIES_EVENT));
 }
 
-export function addInquiry(input: {
+export async function addInquiry(input: {
   propertyId: number;
   propertyTitle: string;
   buyerName: string;
   buyerEmail: string;
   message: string;
-}): Inquiry {
+}): Promise<Inquiry> {
   const inquiry: Inquiry = {
     id: `YTQ-${Date.now()}`,
     propertyId: input.propertyId,
@@ -67,21 +64,23 @@ export function addInquiry(input: {
     createdAt: new Date().toISOString(),
     status: "NEW",
   };
-  writeInquiries([inquiry, ...readInquiries()]);
+  const all = await readInquiries();
+  await writeInquiries([inquiry, ...all]);
   return inquiry;
 }
 
-export function markInquiryReplied(id: string): Inquiry[] {
-  const next = readInquiries().map((inquiry) =>
+export async function markInquiryReplied(id: string): Promise<Inquiry[]> {
+  const next = (await readInquiries()).map((inquiry) =>
     inquiry.id === id ? { ...inquiry, status: "REPLIED" as InquiryStatus } : inquiry,
   );
-  return writeInquiries(next);
+  await writeInquiries(next);
+  return next;
 }
 
 /** Send a seller reply and mark the inquiry as replied. */
-export function replyToInquiry(id: string, reply: string): Inquiry[] {
+export async function replyToInquiry(id: string, reply: string): Promise<Inquiry[]> {
   const trimmed = reply.trim();
-  const next = readInquiries().map((inquiry) =>
+  const next = (await readInquiries()).map((inquiry) =>
     inquiry.id === id
       ? {
           ...inquiry,
@@ -90,7 +89,8 @@ export function replyToInquiry(id: string, reply: string): Inquiry[] {
         }
       : inquiry,
   );
-  return writeInquiries(next);
+  await writeInquiries(next);
+  return next;
 }
 
 const SIMULATED_BUYERS = [
@@ -113,7 +113,8 @@ export function simulatedInquiries(
 ): Inquiry[] {
   const count = 1 + (property.id % 3);
   return Array.from({ length: count }, (_, index) => {
-    const buyer = SIMULATED_BUYERS[(property.id + index) % SIMULATED_BUYERS.length];
+    const buyer =
+      SIMULATED_BUYERS[(property.id + index) % SIMULATED_BUYERS.length];
     return {
       id: `sim-${property.id}-${index}`,
       propertyId: property.id,

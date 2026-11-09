@@ -2,424 +2,160 @@
 
 import { useEffect, useState } from "react";
 import {
-  AlertTriangle,
   ArrowLeft,
-  Building2,
   Check,
-  ClipboardCheck,
-  FileCheck2,
   Lock,
-  MessageSquare,
-  Send,
   ShieldCheck,
+  Trash2,
+  UserPlus,
   X,
 } from "lucide-react";
 import {
   getListingStatus,
   ListingStatus,
   Property,
-  VerificationStatus,
 } from "@/lib/marketplace";
 import { YUTARA_SERVICE_AREA } from "@/lib/yutara-config";
+import { resetAllData } from "@/lib/reset";
 import {
-  DocumentStatus,
-  formatCheckDate,
-  getVerificationRecord,
-  isReadyForApproval,
-  OfficeCheckStatus,
-  readVerificationRecords,
-  saveVerificationRecord,
-  VerificationDecision,
-  VerificationRecord,
-  verificationProgress,
-  VERIFICATION_EVENT,
-} from "@/lib/verification";
-
-type Decision = VerificationDecision;
+  approvePendingUser,
+  denyPendingUser,
+  readPendingUsers,
+} from "@/lib/demo-auth";
+import type { PendingUser } from "@/lib/demo-auth";
 
 export function AdminView({
   properties,
-  onApprove,
   onSetListingStatus,
-  onSetVerification,
 }: {
   properties: Property[];
-  onApprove: (id: number) => void;
   onSetListingStatus: (
     id: number,
     status: ListingStatus,
     reason?: string,
   ) => void;
-  onSetVerification: (
-    id: number,
-    status: VerificationStatus,
-    note: string,
-  ) => void;
 }) {
-  const [records, setRecords] = useState<VerificationRecord[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [draft, setDraft] = useState<VerificationRecord | null>(null);
-  const [notice, setNotice] = useState("");
-
-  useEffect(() => {
-    const sync = () => setRecords(readVerificationRecords());
-    sync();
-    window.addEventListener(VERIFICATION_EVENT, sync);
-    window.addEventListener("storage", sync);
-    return () => {
-      window.removeEventListener(VERIFICATION_EVENT, sync);
-      window.removeEventListener("storage", sync);
-    };
-  }, []);
-
-  const select = (id: number | null) => {
-    setSelectedId(id);
-    setDraft(id === null ? null : getVerificationRecord(id));
-  };
+  const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([]);
 
   const pending = properties.filter(
-    (item) =>
-      item.status !== "PUBLISHED" && item.verificationStatus !== "VERIFIED",
+    (item) => item.listingStatus !== "OPEN_FOR_OFFERS",
   );
 
   const selected = properties.find((item) => item.id === selectedId) || null;
 
-  const flash = (message: string) => {
-    setNotice(message);
-    window.setTimeout(() => setNotice(""), 2600);
-  };
+  const isPublished = (item: Property) =>
+    getListingStatus(item) === "OPEN_FOR_OFFERS";
 
-  const persist = (next: VerificationRecord) => {
-    const saved = saveVerificationRecord(next);
-    setDraft(saved);
-    setRecords(readVerificationRecords());
-    return saved;
-  };
-
-  const setDocument = (key: string, status: DocumentStatus) => {
-    if (!draft) return;
-    persist({
-      ...draft,
-      documents: draft.documents.map((document) =>
-        document.key === key ? { ...document, status } : document,
-      ),
-    });
-  };
-
-  const verifyAll = () => {
-    if (!draft) return;
-    persist({
-      ...draft,
-      documents: draft.documents.map((document) => ({
-        ...document,
-        status: "VERIFIED" as DocumentStatus,
-      })),
-    });
-    flash("All required documents marked verified.");
-  };
-
-  const patchCheck = (
-    checkId: string,
-    patch: Partial<VerificationRecord["checks"][number]>,
-  ) => {
-    if (!draft) return;
-    setDraft({
-      ...draft,
-      checks: draft.checks.map((check) =>
-        check.id === checkId ? { ...check, ...patch } : check,
-      ),
-    });
-  };
-
-  const sendRequest = (checkId: string) => {
-    if (!draft) return;
-    const next: VerificationRecord = {
-      ...draft,
-      checks: draft.checks.map((check) =>
-        check.id === checkId
-          ? {
-              ...check,
-              status: "PENDING",
-              requestedAt: new Date().toISOString(),
-              checkedAt: undefined,
-            }
-          : check,
-      ),
-    };
-    persist(next);
-    flash("Verification request sent to the office.");
-  };
-
-  const logResponse = (checkId: string) => {
-    if (!draft) return;
-    persist({
-      ...draft,
-      checks: draft.checks.map((check) =>
-        check.id === checkId
-          ? { ...check, checkedAt: new Date().toISOString() }
-          : check,
-      ),
-    });
-    flash("Office response recorded.");
-  };
-
-  const decide = (decision: Decision) => {
-    if (!draft || !selected) return;
-    if (decision === "APPROVED") {
-      if (!isReadyForApproval(draft)) return;
-      persist({ ...draft, decision, decisionNote: "" });
-      onApprove(selected.id);
-      flash("Documents and office checks cleared. Property published.");
-      select(null);
-      return;
-    }
-    const note = window.prompt(
-      decision === "REJECTED"
-        ? "Reason for rejection (required):"
-        : "What correction is needed? (required):",
-    );
-    if (!note?.trim()) return;
-    persist({ ...draft, decision, decisionNote: note.trim() });
-    onSetVerification(
-      selected.id,
-      decision === "REJECTED" ? "REJECTED" : "NEEDS_CORRECTION",
-      note.trim(),
-    );
-    flash(
-      decision === "REJECTED"
-        ? "Submission rejected with a recorded reason."
-        : "Correction requested from the seller.",
-    );
-    select(null);
-  };
+  useEffect(() => {
+    const sync = () => setPendingUsers(readPendingUsers());
+    sync();
+    window.addEventListener("storage", sync);
+    return () => window.removeEventListener("storage", sync);
+  }, []);
 
   return (
     <main className="workspace">
       <div className="container">
         <div className="eyebrow">YuTara operations</div>
-        <h1 className="display">Verification desk</h1>
+        <h1 className="display">Listing desk</h1>
 
-        {notice && <div className="admin-notice">{notice}</div>}
-
-        {selected && draft ? (
-          <section className="verify-detail">
+        {selected ? (
+          <section className="listing-detail">
             <button
               className="back-button"
-              onClick={() => select(null)}
+              onClick={() => setSelectedId(null)}
             >
               <ArrowLeft size={16} /> Back to queue
             </button>
 
-            <div className="verify-detail-head">
+            <div className="listing-detail-head">
               <div>
-                <div className="eyebrow">Reviewing submission</div>
+                <div className="eyebrow">Managing listing</div>
                 <h2 className="display">{selected.title}</h2>
                 <p className="muted">
                   {selected.barangay}, {selected.city} · Seller:{" "}
                   {selected.seller} · {selected.type || selected.propertyType}
                 </p>
               </div>
-              <div className="verify-progress-box">
-                <span className="muted">Verification progress</span>
-                <div className="verify-progress">
-                  <span style={{ width: `${verificationProgress(draft)}%` }} />
-                </div>
-                <strong>{verificationProgress(draft)}%</strong>
+              <div className="listing-status-box">
+                <span className="muted">Listing status</span>
+                <span
+                  className={`status ${
+                    isPublished(selected) ? "verified" : "review"
+                  }`}
+                >
+                  {getListingStatus(selected).replaceAll("_", " ")}
+                </span>
               </div>
             </div>
 
-            {selected.submittedDocuments &&
-              selected.submittedDocuments.length > 0 && (
-                <div className="verification-box" style={{ marginBottom: 18 }}>
-                  <strong>Files provided by the seller</strong>
-                  <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
-                    {selected.submittedDocuments.map((name, index) => (
-                      <li key={`${name}-${index}`}>{name}</li>
-                    ))}
-                  </ul>
-                </div>
+            <div className="listing-actions">
+              {isPublished(selected) && (
+                <>
+                  <button
+                    className="button button-ghost"
+                    onClick={() => {
+                      if (
+                        !window.confirm(
+                          "Close this listing? It will be removed from active marketplace results.",
+                        )
+                      )
+                        return;
+                      onSetListingStatus(selected.id, "CLOSED");
+                    }}
+                  >
+                    Close listing
+                  </button>
+                  <button
+                    className="button button-ghost"
+                    onClick={() => {
+                      if (
+                        !window.confirm(
+                          "Mark this property as sold?",
+                        )
+                      )
+                        return;
+                      onSetListingStatus(selected.id, "SOLD");
+                    }}
+                  >
+                    Mark sold
+                  </button>
+                </>
               )}
-
-            <div className="verify-grid">
-              <div className="table-wrap verify-block">
-                <div className="verify-block-head">
-                  <h3>
-                    <FileCheck2 size={16} /> Document review
-                  </h3>
-                  <div style={{ display: "grid", gap: 6, justifyItems: "end" }}>
-                    <span className="muted">
-                      Mark each submitted document as verified or rejected.
-                    </span>
-                    <button className="button button-ghost" onClick={verifyAll}>
-                      <Check size={14} /> Verify all documents
-                    </button>
-                  </div>
-                </div>
-                <div className="verify-docs">
-                  {draft.documents.map((document) => (
-                    <div className="verify-doc" key={document.key}>
-                      <div>
-                        <strong>{document.name}</strong>
-                        <span className="document-label">
-                          {document.required ? "Required" : "Optional"}
-                        </span>
-                      </div>
-                      <div className="verify-doc-actions">
-                        <button
-                          className={`button ${document.status === "VERIFIED" ? "button-primary" : "button-ghost"}`}
-                          onClick={() => setDocument(document.key, "VERIFIED")}
-                        >
-                          <Check size={14} /> Verified
-                        </button>
-                        <button
-                          className={`button ${document.status === "REJECTED" ? "button-danger" : "button-ghost"}`}
-                          onClick={() => setDocument(document.key, "REJECTED")}
-                        >
-                          <X size={14} /> Reject
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="table-wrap verify-block">
-                <div className="verify-block-head">
-                  <h3>
-                    <Building2 size={16} /> Government verification
-                  </h3>
-                  <span className="muted">
-                    Request and record responses from the relevant offices.
-                  </span>
-                </div>
-                <div className="verify-offices">
-                  {draft.checks.map((check) => (
-                    <div className="verify-office" key={check.id}>
-                      <div className="verify-office-head">
-                        <div>
-                          <strong>{check.office}</strong>
-                          <span className="muted">{check.scope}</span>
-                        </div>
-                        <span
-                          className={`status ${
-                            check.status === "CLEARED"
-                              ? "verified"
-                              : check.status === "PENDING"
-                                ? "review"
-                                : "correction"
-                          }`}
-                        >
-                          {check.status.replace("_", " ")}
-                        </span>
-                      </div>
-                      <textarea
-                        className="form-input form-textarea verify-response"
-                        placeholder="Paste the office response or officer feedback…"
-                        value={check.response}
-                        onChange={(event) =>
-                          patchCheck(check.id, { response: event.target.value })
-                        }
-                      />
-                      <div className="verify-office-foot">
-                        <span className="muted verify-office-meta">
-                          <MessageSquare size={13} />
-                          {check.checkedAt
-                            ? `Response ${formatCheckDate(check.checkedAt)}`
-                            : check.requestedAt
-                              ? `Requested ${formatCheckDate(check.requestedAt)}`
-                              : "Not yet requested"}
-                        </span>
-                        <div className="verify-office-actions">
-                          <select
-                            className="form-input verify-status-select"
-                            value={check.status}
-                            onChange={(event) =>
-                              patchCheck(check.id, {
-                                status: event.target
-                                  .value as OfficeCheckStatus,
-                              })
-                            }
-                          >
-                            <option value="PENDING">Pending</option>
-                            <option value="CLEARED">Cleared</option>
-                            <option value="DISCREPANCY">Discrepancy</option>
-                            <option value="NOT_FOUND">Not found</option>
-                          </select>
-                          <button
-                            className="button button-ghost"
-                            onClick={() => sendRequest(check.id)}
-                          >
-                            <Send size={14} /> Request
-                          </button>
-                          <button
-                            className="button button-primary"
-                            onClick={() => logResponse(check.id)}
-                          >
-                            <ClipboardCheck size={14} /> Log response
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="verify-decision">
-              <div
-                className={`verify-gate ${isReadyForApproval(draft) ? "ready" : ""}`}
-              >
-                {isReadyForApproval(draft) ? (
-                  <>
-                    <ShieldCheck size={18} />
-                    <div>
-                      <strong>Ready to publish</strong>
-                      <p>
-                        Required documents are verified. Approving publishes this
-                        listing to the marketplace.
-                      </p>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <AlertTriangle size={18} />
-                    <div>
-                      <strong>Approval locked</strong>
-                      <p>
-                        {draft.documents.filter(
-                          (document) =>
-                            document.required &&
-                            document.status !== "VERIFIED",
-                        ).length}{" "}
-                        required document(s) still need to be verified before this
-                        listing can be published. Office checks are optional and
-                        recorded for the audit trail.
-                      </p>
-                    </div>
-                  </>
-                )}
-              </div>
-              <div className="verify-decision-actions">
-                <button
-                  className="button button-danger"
-                  onClick={() => decide("REJECTED")}
-                >
-                  <X size={15} /> Reject
-                </button>
-                <button
-                  className="button button-ghost"
-                  onClick={() => decide("NEEDS_CORRECTION")}
-                >
-                  <AlertTriangle size={15} /> Request correction
-                </button>
+              {!isPublished(selected) && (
                 <button
                   className="button button-primary"
-                  disabled={!isReadyForApproval(draft)}
-                  onClick={() => decide("APPROVED")}
+                  onClick={() =>
+                    onSetListingStatus(selected.id, "OPEN_FOR_OFFERS")
+                  }
                 >
-                  <Check size={15} /> Approve &amp; publish
+                  Reopen listing
                 </button>
-              </div>
+              )}
+              <button
+                className="button button-danger"
+                onClick={() => {
+                  if (
+                    !window.confirm(
+                      "Terminate Property Listing? This removes it from active marketplace results.",
+                    )
+                  )
+                    return;
+                  const reason = window.prompt(
+                    "Termination reason (required):",
+                  );
+                  if (reason?.trim())
+                    onSetListingStatus(selected.id, "TERMINATED", reason.trim());
+                }}
+              >
+                Terminate
+              </button>
+              {getListingStatus(selected) === "TERMINATED" && (
+                <small className="muted">
+                  Reason: {selected.terminationReason || "Recorded by admin"}
+                </small>
+              )}
             </div>
           </section>
         ) : (
@@ -430,53 +166,154 @@ export function AdminView({
                 {YUTARA_SERVICE_AREA.city} · {YUTARA_SERVICE_AREA.province}
               </p>
               <p style={{ margin: "6px 0 0", fontSize: ".82rem" }}>
-                Every approved listing must be within the current YuTara service
-                area and pass document and government checks.
+                Manage listing status for all properties in the current YuTara
+                service area.
               </p>
             </div>
             <div className="stats">
               <div className="stat">
-                <span>Pending verification</span>
+                <span>Total listings</span>
+                <strong>{properties.length}</strong>
+              </div>
+              <div className="stat">
+                <span>Open for offers</span>
+                <strong>
+                  {properties.filter(isPublished).length}
+                </strong>
+              </div>
+              <div className="stat">
+                <span>Not open</span>
                 <strong>{pending.length}</strong>
               </div>
               <div className="stat">
-                <span>Verified properties</span>
+                <span>Pending user approvals</span>
                 <strong>
-                  {
-                    properties.filter(
-                      (item) =>
-                        item.status === "PUBLISHED" ||
-                        item.verificationStatus === "VERIFIED",
-                    ).length
-                  }
-                </strong>
-              </div>
-              <div className="stat">
-                <span>Needs correction</span>
-                <strong>
-                  {
-                    properties.filter(
-                      (item) => item.status === "NEEDS_CORRECTION",
-                    ).length
-                  }
-                </strong>
-              </div>
-              <div className="stat">
-                <span>Awaiting office reply</span>
-                <strong>
-                  {records.reduce(
-                    (sum, record) =>
-                      sum +
-                      record.checks.filter(
-                        (check) =>
-                          check.requestedAt && check.status === "PENDING",
-                      ).length,
-                    0,
-                  )}
+                  {pendingUsers.filter((u) => u.status === "PENDING").length}
                 </strong>
               </div>
             </div>
-            <div className="table-wrap">
+
+            {/* User Registration Approval Section */}
+            <div className="table-wrap" style={{ marginTop: 26 }}>
+              <div className="section-heading">
+                <div>
+                  <div className="eyebrow">User registration queue</div>
+                  <h2 className="display">Approve new users</h2>
+                </div>
+                <p className="muted">
+                  Review and approve or deny new user registration applications.
+                  Each applicant has submitted at least one valid ID for
+                  verification.
+                </p>
+              </div>
+              {pendingUsers.length === 0 ? (
+                <div className="table-wrap empty-dashboard">
+                  <UserPlus size={24} />
+                  <p className="muted">
+                    No pending user registrations. New applicants will appear
+                    here.
+                  </p>
+                </div>
+              ) : (
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Applicant</th>
+                      <th>Email</th>
+                      <th>ID(s)</th>
+                      <th>Submitted</th>
+                      <th>Status</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pendingUsers.map((user) => (
+                      <tr key={user.id}>
+                        <td>
+                          <strong>{user.name}</strong>
+                        </td>
+                        <td>
+                          <span className="muted">{user.email}</span>
+                        </td>
+                        <td>
+                          <span className="badge badge-status">
+                            {user.id2 ? "2 IDs" : "1 ID"}
+                          </span>
+                        </td>
+                        <td className="muted">
+                          {new Date(user.createdAt).toLocaleDateString(
+                            "en-PH",
+                            { month: "short", day: "numeric" },
+                          )}
+                        </td>
+                        <td>
+                          <span
+                            className={`status ${
+                              user.status === "PENDING"
+                                ? "review"
+                                : user.status === "APPROVED"
+                                  ? "verified"
+                                  : "correction"
+                            }`}
+                          >
+                            {user.status}
+                          </span>
+                        </td>
+                        <td>
+                          {user.status === "PENDING" ? (
+                            <div style={{ display: "flex", gap: 6 }}>
+                              <button
+                                className="button button-primary"
+                                onClick={() => {
+                                  approvePendingUser(user.id, "admin");
+                                  setPendingUsers(readPendingUsers());
+                                }}
+                              >
+                                <Check size={14} /> Approve
+                              </button>
+                              <button
+                                className="button button-danger"
+                                onClick={() => {
+                                  denyPendingUser(user.id, "admin");
+                                  setPendingUsers(readPendingUsers());
+                                }}
+                              >
+                                <X size={14} /> Deny
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="muted">
+                              {user.status === "APPROVED"
+                                ? "Approved"
+                                : "Denied"}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <div className="table-wrap" style={{ marginTop: 22 }}>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginBottom: 12 }}>
+                <button
+                  className="button button-danger"
+                  onClick={async () => {
+                    if (
+                      !window.confirm(
+                        "Reset all data? This clears every listing, reservation, transaction, pending user, and session. This cannot be undone.",
+                      )
+                    )
+                      return;
+                    await resetAllData();
+                    window.location.reload();
+                  }}
+                >
+                  <Trash2 size={15} /> Reset All Data
+                </button>
+              </div>
               <table className="table">
                 <thead>
                   <tr>
@@ -484,15 +321,12 @@ export function AdminView({
                     <th>Seller</th>
                     <th>Type</th>
                     <th>Status</th>
-                    <th>Review</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {properties.map((item) => {
-                    const isPublished =
-                      item.status === "PUBLISHED" ||
-                      item.verificationStatus === "VERIFIED";
-
+                    const published = isPublished(item);
                     return (
                       <tr key={item.id}>
                         <td>
@@ -506,80 +340,82 @@ export function AdminView({
                         <td>{item.type || item.propertyType}</td>
                         <td>
                           <span
-                            className={`status ${isPublished ? "verified" : item.status === "NEEDS_CORRECTION" ? "correction" : "review"}`}
-                          >
-                            {item.status.replace("_", " ")}
-                          </span>
-                          <br />
-                          <span
-                            className={`status listing-status ${getListingStatus(item).toLowerCase()}`}
+                            className={`status ${
+                              published ? "verified" : "review"
+                            }`}
                           >
                             {getListingStatus(item).replaceAll("_", " ")}
                           </span>
                         </td>
                         <td>
                           <div className="admin-actions">
-                            {!isPublished && (
+                            {published ? (
+                              <>
+                                <button
+                                  className="button button-ghost"
+                                  onClick={() =>
+                                    onSetListingStatus(item.id, "CLOSED")
+                                  }
+                                >
+                                  Close
+                                </button>
+                                <button
+                                  className="button button-ghost"
+                                  onClick={() => {
+                                    if (
+                                      !window.confirm(
+                                        "Mark this property as sold?",
+                                      )
+                                    )
+                                      return;
+                                    onSetListingStatus(item.id, "SOLD");
+                                  }}
+                                >
+                                  Mark sold
+                                </button>
+                                <button
+                                  className="button button-danger"
+                                  onClick={() => {
+                                    if (
+                                      !window.confirm(
+                                        "Terminate Property Listing? This removes it from active marketplace results.",
+                                      )
+                                    )
+                                      return;
+                                    const reason = window.prompt(
+                                      "Termination reason (required):",
+                                    );
+                                    if (reason?.trim())
+                                      onSetListingStatus(
+                                        item.id,
+                                        "TERMINATED",
+                                        reason.trim(),
+                                      );
+                                  }}
+                                >
+                                  Terminate
+                                </button>
+                              </>
+                            ) : (
                               <button
                                 className="button button-primary"
-                                onClick={() => select(item.id)}
+                                onClick={() =>
+                                  onSetListingStatus(
+                                    item.id,
+                                    "OPEN_FOR_OFFERS",
+                                  )
+                                }
                               >
-                                <ClipboardCheck size={14} /> Review documents
+                                Reopen
                               </button>
                             )}
-                            {isPublished &&
-                              getListingStatus(item) === "OPEN_FOR_OFFERS" && (
-                                <>
-                                  <button
-                                    className="button button-ghost"
-                                    onClick={() =>
-                                      onSetListingStatus(item.id, "CLOSED")
-                                    }
-                                  >
-                                    Close
-                                  </button>
-                                  <button
-                                    className="button button-ghost"
-                                    onClick={() =>
-                                      window.confirm(
-                                        "Mark this property as sold?",
-                                      ) &&
-                                      onSetListingStatus(item.id, "SOLD")
-                                    }
-                                  >
-                                    Mark sold
-                                  </button>
-                                  <button
-                                    className="button button-danger"
-                                    onClick={() => {
-                                      if (
-                                        !window.confirm(
-                                          "Terminate Property Listing? This removes it from active marketplace results.",
-                                        )
-                                      )
-                                        return;
-                                      const reason = window.prompt(
-                                        "Termination reason (required):",
-                                      );
-                                      if (reason?.trim())
-                                        onSetListingStatus(
-                                          item.id,
-                                          "TERMINATED",
-                                          reason.trim(),
-                                        );
-                                    }}
-                                  >
-                                    Terminate
-                                  </button>
-                                </>
-                              )}
+                            {getListingStatus(item) === "TERMINATED" && (
+                              <small className="muted">
+                                Reason:{" "}
+                                {item.terminationReason || "Recorded by admin"}
+                              </small>
+                            )}
                           </div>
-                          {getListingStatus(item) === "TERMINATED" && (
-                            <small className="muted">
-                              Reason:{" "}
-                              {item.terminationReason || "Recorded by admin"}
-                            </small>
-                          )}
                         </td>
                       </tr>
                     );
@@ -593,17 +429,17 @@ export function AdminView({
                   size={18}
                   style={{ verticalAlign: "-4px", marginRight: 6 }}
                 />
-                Verification policy
+                Listing policy
               </h3>
               <p style={{ margin: 0, fontSize: ".82rem" }}>
-                A listing is published only after the seller&apos;s documents and
-                the government office responses are reviewed and cleared.
-                Promoted listings cannot bypass this review.
+                Listings are published directly to the marketplace. The partner
+                agency coordinates escrow, documents, and the transfer from
+                listing to closing. YuTara does not perform government
+                verification or title review.
                 <Lock
                   size={13}
                   style={{ verticalAlign: "-2px", margin: "0 4px" }}
                 />
-                Office responses are recorded for the audit trail.
               </p>
             </div>
           </>

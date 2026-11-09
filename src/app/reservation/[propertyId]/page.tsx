@@ -31,11 +31,10 @@ export default function ReservationPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
+    const timer = window.setTimeout(async () => {
+      const props = await readProperties();
       const found =
-        readProperties().find(
-          (item) => item.id === Number(params.propertyId),
-        ) ?? null;
+        props.find((item) => item.id === Number(params.propertyId)) ?? null;
       setProperty(found);
     }, 0);
     return () => window.clearTimeout(timer);
@@ -43,7 +42,7 @@ export default function ReservationPage() {
 
   useEffect(() => {
     if (!property) return;
-    window.setTimeout(() => {
+    window.setTimeout(async () => {
       const current = getStoredSession();
       if (!current) {
         router.replace(`/login?next=/reservation/${params.propertyId}`);
@@ -54,7 +53,7 @@ export default function ReservationPage() {
         setError("You can't reserve your own listing.");
         return;
       }
-      const result = createReservation(property, current.email);
+      const result = await createReservation(property, current.email);
       if (result.error) {
         setError(result.error);
       } else {
@@ -65,7 +64,7 @@ export default function ReservationPage() {
             : false,
         );
         if (result.reservation) {
-          createTransactionFromReservation({
+          await createTransactionFromReservation({
             reservation: result.reservation,
             property,
             buyerName: current.name,

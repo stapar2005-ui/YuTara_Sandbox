@@ -19,8 +19,8 @@ export default function VerifiedMapPage() {
   const [session, setSession] = useState<DemoUser | null>(null);
 
   useEffect(() => {
-    const sync = () => {
-      const next = readProperties().filter(isActiveListing);
+    const sync = async () => {
+      const next = (await readProperties()).filter(isActiveListing);
       setListings(next);
       setSelectedId((current) => current ?? next[0]?.id);
       setSession(getStoredSession());

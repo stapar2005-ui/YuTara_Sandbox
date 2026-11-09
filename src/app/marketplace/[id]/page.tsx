@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Check, Heart, MapPin, MessageCircle, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Check, Heart, MapPin, MessageCircle, Users } from "lucide-react";
 import { AppNav } from "@/components/AppNav";
 import { Modal } from "@/components/Modal";
 import {
@@ -40,10 +40,9 @@ export default function PropertyRoute() {
   const [sent, setSent] = useState(false);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const found = readProperties().find(
-        (item) => item.id === Number(params.id),
-      );
+    const timer = window.setTimeout(async () => {
+      const props = await readProperties();
+      const found = props.find((item) => item.id === Number(params.id));
       setProperty(found);
       setSession(getStoredSession());
       setSaved(found ? readSaved().includes(found.id) : false);
@@ -190,31 +189,30 @@ export default function PropertyRoute() {
               )}
               <div className="verification-box">
                 <h3>
-                  <ShieldCheck size={18} /> YuTara verification
+                  <Users size={18} style={{ verticalAlign: "-4px", marginRight: 6 }} />
+                  Agency-managed transaction
                 </h3>
                 <ul>
                   <li>
-                    <Check size={14} /> Seller identity reviewed
+                    <Check size={14} /> Buyer requests through the agency
                   </li>
                   <li>
-                    <Check size={14} /> Required documents submitted
+                    <Check size={14} /> Agency holds payment in escrow
                   </li>
                   <li>
-                    <Check size={14} /> Property information reviewed
+                    <Check size={14} /> Agency prepares transfer documents
                   </li>
                   <li>
-                    <Check size={14} /> Listing requirements met
+                    <Check size={14} /> Both parties sign through the agency
+                  </li>
+                  <li>
+                    <Check size={14} /> Agency releases funds and records transfer
                   </li>
                 </ul>
-                <p>
-                  Verification date: {property.verificationDate || "2026-08-01"}{" "}
-                  · ID: {property.verificationId}
+                <p style={{ fontSize: ".74rem", marginBottom: 0 }}>
+                  Buyers should conduct appropriate legal and government due
+                  diligence before completing a purchase.
                 </p>
-                <small>
-                  YuTara verification reflects an internal review of submitted
-                  information and documents. Buyers should conduct legal and
-                  government due diligence.
-                </small>
               </div>
             </div>
           </div>

@@ -162,8 +162,8 @@ export function PaymentPortal({
       window.setTimeout(() => setStepIndex(index), index * 420);
     });
 
-    window.setTimeout(() => {
-      const updated = confirmSimulatedPayment(reservation.id, methodLabel());
+    window.setTimeout(async () => {
+      const updated = await confirmSimulatedPayment(reservation.id, methodLabel());
       if (!updated) {
         setStage("form");
         setError("Payment could not be completed. Please start a new reservation.");

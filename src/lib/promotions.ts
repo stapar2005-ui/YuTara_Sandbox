@@ -13,7 +13,7 @@ export const PROMO_OPTIONS: PromoOption[] = [
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Promote a listing for a number of days starting now. */
-export function promoteLand(id: number, days: number): boolean {
+export async function promoteLand(id: number, days: number): Promise<boolean> {
   const until = new Date(Date.now() + days * DAY_MS).toISOString();
   return updateProperty(id, {
     promoted: true,
@@ -22,7 +22,7 @@ export function promoteLand(id: number, days: number): boolean {
   });
 }
 
-export function endPromotion(id: number): boolean {
+export async function endPromotion(id: number): Promise<boolean> {
   return updateProperty(id, {
     promoted: false,
     promotionUntil: undefined,

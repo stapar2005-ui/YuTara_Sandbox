@@ -13,27 +13,37 @@ export const DEMO_ACCOUNTS: Record<string, DemoUser & { password: string }> = {
     email: "admin@yutara.com",
     password: "12345",
     role: "ADMIN",
-    name: "YuTara Admin",
+    name: "YuTara Admin 1",
   },
-  "user@yutara.com": {
-    email: "user@yutara.com",
+  "admin2@yutara.com": {
+    email: "admin2@yutara.com",
     password: "12345",
-    role: "USER",
-    name: "YuTara User",
+    role: "ADMIN",
+    name: "YuTara Admin 2",
   },
-  "buyer@yutara.com": {
-    email: "buyer@yutara.com",
+  "admin3@yutara.com": {
+    email: "admin3@yutara.com",
     password: "12345",
-    role: "USER",
-    name: "YuTara Buyer",
-  },
-  "seller@yutara.com": {
-    email: "seller@yutara.com",
-    password: "12345",
-    role: "USER",
-    name: "YuTara Seller",
+    role: "ADMIN",
+    name: "YuTara Admin 3",
   },
 };
+
+export type PendingUser = {
+  id: string;
+  email: string;
+  name: string;
+  password: string;
+  id1: string; // filename of first valid ID
+  id2?: string; // filename of second valid ID (optional)
+  status: "PENDING" | "APPROVED" | "DENIED";
+  createdAt: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+};
+
+export const PENDING_USERS_KEY = "yutara-pending-users";
+export const PENDING_USERS_EVENT = "yutara-pending-users-change";
 
 export const SESSION_KEY = "yutara-session";
 export const SESSION_EVENT = "yutara-session-change";
@@ -92,4 +102,94 @@ export function clearStoredSession(): void {
   } catch {
     // ignore
   }
+}
+
+/** Pending user registration management */
+
+export function readPendingUsers(): PendingUser[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(PENDING_USERS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed;
+  } catch {
+    return [];
+  }
+}
+
+function writePendingUsers(users: PendingUser[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(PENDING_USERS_KEY, JSON.stringify(users));
+  } catch {
+    // ignore
+  }
+  window.dispatchEvent(new Event(PENDING_USERS_EVENT));
+}
+
+export function createPendingUser(input: {
+  email: string;
+  name: string;
+  password: string;
+  id1: string;
+  id2?: string;
+}): PendingUser {
+  const user: PendingUser = {
+    id: `PEND-${Date.now()}`,
+    email: input.email.toLowerCase(),
+    name: input.name,
+    password: input.password,
+    id1: input.id1,
+    id2: input.id2,
+    status: "PENDING",
+    createdAt: new Date().toISOString(),
+  };
+  const existing = readPendingUsers();
+  writePendingUsers([user, ...existing]);
+  return user;
+}
+
+export function approvePendingUser(
+  id: string,
+  reviewedBy: string,
+): PendingUser | null {
+  const users = readPendingUsers();
+  const index = users.findIndex((u) => u.id === id);
+  if (index < 0) return null;
+  users[index] = {
+    ...users[index],
+    status: "APPROVED",
+    reviewedAt: new Date().toISOString(),
+    reviewedBy,
+  };
+  writePendingUsers(users);
+  return users[index];
+}
+
+export function denyPendingUser(
+  id: string,
+  reviewedBy: string,
+): PendingUser | null {
+  const users = readPendingUsers();
+  const index = users.findIndex((u) => u.id === id);
+  if (index < 0) return null;
+  users[index] = {
+    ...users[index],
+    status: "DENIED",
+    reviewedAt: new Date().toISOString(),
+    reviewedBy,
+  };
+  writePendingUsers(users);
+  return users[index];
+}
+
+export function isEmailRegisteredOrPending(email: string): boolean {
+  const lower = email.toLowerCase();
+  if (DEMO_ACCOUNTS[lower]) return true;
+  const pending = readPendingUsers();
+  return pending.some(
+    (u) => u.email === lower && u.status === "PENDING",
+  );
 }
