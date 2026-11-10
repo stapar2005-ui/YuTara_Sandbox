@@ -1,7 +1,7 @@
 "use client";
 
-import { ArrowLeft, Check, Heart, MapPin, MessageCircle, Users } from "lucide-react";
-import { getListingStatus, isActiveListing, money, Property } from "@/lib/marketplace";
+import { ArrowLeft, Heart, MapPin, MessageCircle, Users } from "lucide-react";
+import { getListingStatus, money, Property } from "@/lib/marketplace";
 
 export function PropertyDetailView({
   property,

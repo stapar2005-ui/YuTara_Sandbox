@@ -7,7 +7,7 @@ import { Bell, Menu, X, ChevronRight } from "lucide-react";
 import { YuTaraLogo } from "./YuTaraLogo";
 import { clearStoredSession, DemoUser } from "@/lib/demo-auth";
 import { setStoredTheme } from "@/lib/theme";
-import { readNotifications, markNotificationRead, unreadCount } from "@/lib/notification-service";
+import { readNotifications, markNotificationRead, unreadCount, type Notification } from "@/lib/notification-service";
 import { useAutoHideHeader } from "@/lib/use-auto-hide-header";
 
 export function AppNav({ session }: { session: DemoUser | null }) {
@@ -15,7 +15,7 @@ export function AppNav({ session }: { session: DemoUser | null }) {
   const [count, setCount] = useState(0);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notifLoading, setNotifLoading] = useState(false);
   const headerHidden = useAutoHideHeader();
 

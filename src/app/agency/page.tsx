@@ -1,21 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
-  ArrowRight,
   BadgeCheck,
-  BookOpen,
   Clock,
   FileText,
-  Handshake,
   ShieldCheck,
-  Truck,
-  Wallet,
   Users,
-  Search,
-  RefreshCw,
 } from "lucide-react";
 import { formatMoney } from "@/lib/marketplace";
+import type { Property } from "@/lib/marketplace";
 import {
   readTransactions,
   Transaction,
@@ -23,9 +18,9 @@ import {
 } from "@/lib/transactions";
 import { readProperties } from "@/lib/property-store";
 import { readBookingRequests, BookingRequest } from "@/lib/booking-service";
-import { readDocumentRequirements } from "@/lib/document-service";
-import { readAgencyPersonnel, canManageTransactions } from "@/lib/agency-service";
-import { readNotifications, unreadCount } from "@/lib/notification-service";
+import { readDocumentRequirements, DocumentRequirement } from "@/lib/document-service";
+import { readAgencyPersonnel, AgencyPersonnel } from "@/lib/agency-service";
+import { readNotifications, Notification } from "@/lib/notification-service";
 import { DemoUser, getStoredSession } from "@/lib/demo-auth";
 import { AgencyLayout } from "./layout";
 
@@ -67,22 +62,83 @@ const STAGE_COLOR: Record<string, string> = {
   TERMINATED: "#b91c1c",
 };
 
+interface AgencyOverviewProps {
+  transactions: Transaction[];
+  pendingIntake: Transaction[];
+  activeTransactions: Transaction[];
+  completedTransactions: Transaction[];
+  pendingDocs: DocumentRequirement[];
+  bookingRequests: BookingRequest[];
+  notifications: Notification[];
+  agencyPersonnel: AgencyPersonnel[];
+  formatMoney: (value: number) => string;
+}
+
+interface AllTransactionsProps {
+  transactions: Transaction[];
+  properties: Property[];
+  formatMoney: (value: number) => string;
+}
+
+interface TransactionIntakeProps {
+  properties: Property[];
+  bookingRequests: BookingRequest[];
+  formatMoney: (value: number) => string;
+}
+
+interface DocumentManagementProps {
+  documentRequirements: DocumentRequirement[];
+  properties: Property[];
+  formatMoney: (value: number) => string;
+}
+
+interface DocumentReviewProps {
+  documentRequirements: DocumentRequirement[];
+  formatMoney: (value: number) => string;
+}
+
+interface ProcessingQueueProps {
+  transactions: Transaction[];
+  formatMoney: (value: number) => string;
+}
+
+interface ClientManagementProps {
+  transactions: Transaction[];
+  formatMoney: (value: number) => string;
+}
+
+interface CompletedTransfersProps {
+  transactions: Transaction[];
+  formatMoney: (value: number) => string;
+}
+
+interface AgencyReportsProps {
+  transactions: Transaction[];
+  formatMoney: (value: number) => string;
+}
+
+interface AgencySettingsProps {
+  personnel: AgencyPersonnel[];
+  formatMoney: (value: number) => string;
+}
+
 export default function AgencyPage() {
+  const router = useRouter();
   const [session, setSession] = useState<DemoUser | null>(null);
-  const [activeSection, setActiveSection] = useState("overview");
+  const [activeSection] = useState("overview");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [bookingRequests, setBookingRequests] = useState<BookingRequest[]>([]);
-  const [properties, setProperties] = useState<any[]>([]);
-  const [documentRequirements, setDocumentRequirements] = useState<any[]>([]);
-  const [agencyPersonnel, setAgencyPersonnel] = useState<any[]>([]);
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [documentRequirements, setDocumentRequirements] = useState<DocumentRequirement[]>([]);
+  const [agencyPersonnel, setAgencyPersonnel] = useState<AgencyPersonnel[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
       const current = getStoredSession();
       if (!current) {
-        window.location.href = "/login?next=/agency";
+        router.push("/login?next=/agency");
         return;
       }
       setSession(current);
@@ -114,10 +170,9 @@ export default function AgencyPage() {
       window.removeEventListener("storage", load);
       clearTimeout(timer);
     };
-  }, []);
+  }, [router]);
 
   const isAgency = session && session.role.startsWith("AGENCY");
-  const canManage = session && canManageTransactions(session.role);
 
   const pendingIntake = transactions.filter(
     (tx) =>
@@ -257,16 +312,16 @@ function AgencyOverview({
   notifications,
   agencyPersonnel,
   formatMoney,
-}: any) {
+}: AgencyOverviewProps) {
   const totalEscrow = activeTransactions.reduce(
-    (sum: number, tx: any) => sum + (tx.escrowHeld || 0),
+    (sum: number, tx: Transaction) => sum + (tx.escrowHeld || 0),
     0,
   );
   const totalFees = activeTransactions.reduce(
-    (sum: number, tx: any) => sum + (tx.agencyFee || 0),
+    (sum: number, tx: Transaction) => sum + (tx.agencyFee || 0),
     0,
   );
-  const unread = notifications.filter((n: any) => !n.isRead).length;
+  const unread = notifications.filter((n: Notification) => !n.isRead).length;
 
   return (
     <div className="container">
@@ -331,7 +386,7 @@ function AgencyOverview({
           <div className="notification-list">
             {notifications
               .slice(0, 5)
-              .map((n: any) => (
+              .map((n: Notification) => (
                 <div
                   key={n.id}
                   className={`notification-item ${n.isRead ? "" : "unread"}`}
@@ -356,7 +411,7 @@ function AgencyOverview({
 
 /* ---------- All Transactions ---------- */
 
-function AllTransactions({ transactions, properties, formatMoney }: any) {
+function AllTransactions({ transactions, properties, formatMoney }: AllTransactionsProps) {
   return (
     <div className="container">
       <div className="agency-page-header">
@@ -379,7 +434,7 @@ function AllTransactions({ transactions, properties, formatMoney }: any) {
             </tr>
           </thead>
           <tbody>
-            {transactions.map((tx: any) => (
+            {transactions.map((tx: Transaction) => (
               <tr key={tx.id}>
                 <td>
                   <code className="tx-ref">{tx.id}</code>
@@ -435,7 +490,7 @@ function AllTransactions({ transactions, properties, formatMoney }: any) {
 
 /* ---------- Transaction Intake ---------- */
 
-function TransactionIntake({ properties, bookingRequests, formatMoney }: any) {
+function TransactionIntake({ properties, bookingRequests, formatMoney }: TransactionIntakeProps) {
   return (
     <div className="container">
       <div className="agency-page-header">
@@ -463,7 +518,7 @@ function TransactionIntake({ properties, bookingRequests, formatMoney }: any) {
                 </tr>
               </thead>
               <tbody>
-                {bookingRequests.map((b: any) => (
+                {bookingRequests.map((b: BookingRequest) => (
                   <tr key={b.id}>
                     <td>
                       <strong>{b.propertyTitle}</strong>
@@ -504,7 +559,7 @@ function TransactionIntake({ properties, bookingRequests, formatMoney }: any) {
           <label>
             Property
             <select className="form-input">
-              {properties.map((p: any) => (
+              {properties.map((p: Property) => (
                 <option key={p.id} value={p.id}>
                   {p.title} — {p.barangay}, {p.city}
                 </option>
@@ -548,7 +603,7 @@ function TransactionIntake({ properties, bookingRequests, formatMoney }: any) {
 
 /* ---------- Document Management ---------- */
 
-function DocumentManagement({ documentRequirements, properties, formatMoney }: any) {
+function DocumentManagement({ documentRequirements, properties, formatMoney }: DocumentManagementProps) {
   return (
     <div className="container">
       <div className="agency-page-header">
@@ -571,7 +626,7 @@ function DocumentManagement({ documentRequirements, properties, formatMoney }: a
             </tr>
           </thead>
           <tbody>
-            {documentRequirements.map((doc: any) => (
+            {documentRequirements.map((doc: DocumentRequirement) => (
               <tr key={doc.id}>
                 <td>
                   <strong>{doc.requirementName}</strong>
@@ -630,9 +685,9 @@ function DocumentManagement({ documentRequirements, properties, formatMoney }: a
 
 /* ---------- Document Review ---------- */
 
-function DocumentReview({ documentRequirements, formatMoney }: any) {
+function DocumentReview({ documentRequirements, formatMoney }: DocumentReviewProps) {
   const pendingReview = documentRequirements.filter(
-    (doc: any) =>
+    (doc: DocumentRequirement) =>
       doc.status === "SUBMITTED" || doc.status === "UNDER_REVIEW",
   );
 
@@ -658,7 +713,7 @@ function DocumentReview({ documentRequirements, formatMoney }: any) {
               </tr>
             </thead>
             <tbody>
-              {pendingReview.map((doc: any) => (
+              {pendingReview.map((doc: DocumentRequirement) => (
                 <tr key={doc.id}>
                   <td>
                     <strong>{doc.requirementName}</strong>
@@ -706,12 +761,12 @@ function DocumentReview({ documentRequirements, formatMoney }: any) {
 
 /* ---------- Processing Queue ---------- */
 
-function ProcessingQueue({ transactions, formatMoney }: any) {
+function ProcessingQueue({ transactions, formatMoney }: ProcessingQueueProps) {
   const queue = transactions.filter(
-    (tx: any) =>
-      tx.stage !== "COMPLETED" &&
-      tx.stage !== "CANCELLED" &&
-      tx.stage !== "TERMINATED",
+    (tx: Transaction) =>
+      (tx.stage as string) !== "COMPLETED" &&
+      (tx.stage as string) !== "CANCELLED" &&
+      (tx.stage as string) !== "TERMINATED",
   );
 
   return (
@@ -736,7 +791,7 @@ function ProcessingQueue({ transactions, formatMoney }: any) {
             </tr>
           </thead>
           <tbody>
-            {queue.map((tx: any) => (
+            {queue.map((tx: Transaction) => (
               <tr key={tx.id}>
                 <td>
                   <code className="tx-ref">{tx.id}</code>
@@ -777,14 +832,13 @@ function ProcessingQueue({ transactions, formatMoney }: any) {
 
 /* ---------- Client Management ---------- */
 
-function ClientManagement({ transactions, formatMoney }: any) {
-  const txs = transactions as any[];
-  const buyerClients = txs.map((tx: any) => ({
+function ClientManagement({ transactions, formatMoney }: ClientManagementProps) {
+  const buyerClients = transactions.map((tx: Transaction) => ({
     name: tx.buyerName,
     email: tx.buyerId,
     role: "BUYER",
   }));
-  const sellerClients = txs.map((tx: any) => ({
+  const sellerClients = transactions.map((tx: Transaction) => ({
     name: tx.sellerName,
     email: tx.sellerId,
     role: "SELLER",
@@ -812,13 +866,13 @@ function ClientManagement({ transactions, formatMoney }: any) {
             </tr>
           </thead>
           <tbody>
-            {clients.map((c: any, i: number) => (
+            {clients.map((c: { name: string; email: string; role: string }, i: number) => (
               <tr key={i}>
                 <td><strong>{c.name}</strong></td>
                 <td>{c.email}</td>
                 <td>{c.role}</td>
                 <td>{transactions.filter(
-                  (tx: any) =>
+                  (tx: Transaction) =>
                     tx.buyerId === c.email || tx.sellerId === c.email,
                 ).length}</td>
                 <td>
@@ -847,7 +901,7 @@ function ClientManagement({ transactions, formatMoney }: any) {
 
 /* ---------- Completed Transfers ---------- */
 
-function CompletedTransfers({ transactions, formatMoney }: any) {
+function CompletedTransfers({ transactions, formatMoney }: CompletedTransfersProps) {
   return (
     <div className="container">
       <div className="agency-page-header">
@@ -870,7 +924,7 @@ function CompletedTransfers({ transactions, formatMoney }: any) {
             </tr>
           </thead>
           <tbody>
-            {transactions.map((tx: any) => (
+            {transactions.map((tx: Transaction) => (
               <tr key={tx.id}>
                 <td>
                   <code className="tx-ref">{tx.id}</code>
@@ -903,13 +957,13 @@ function CompletedTransfers({ transactions, formatMoney }: any) {
 
 /* ---------- Agency Reports ---------- */
 
-function AgencyReports({ transactions, formatMoney }: any) {
+function AgencyReports({ transactions, formatMoney }: AgencyReportsProps) {
   const totalValue = transactions.reduce(
-    (sum: number, tx: any) => sum + (tx.salePrice || 0),
+    (sum: number, tx: Transaction) => sum + (tx.salePrice || 0),
     0,
   );
   const totalFees = transactions.reduce(
-    (sum: number, tx: any) => sum + (tx.agencyFee || 0),
+    (sum: number, tx: Transaction) => sum + (tx.agencyFee || 0),
     0,
   );
 
@@ -940,9 +994,7 @@ function AgencyReports({ transactions, formatMoney }: any) {
 
 /* ---------- Agency Settings ---------- */
 
-function AgencySettings({ personnel, formatMoney }: any) {
-  const canManage = true; // Simplified - would check role
-
+function AgencySettings({ personnel, formatMoney }: AgencySettingsProps) {
   return (
     <div className="container">
       <div className="agency-page-header">
@@ -968,7 +1020,7 @@ function AgencySettings({ personnel, formatMoney }: any) {
               </tr>
             </thead>
             <tbody>
-              {personnel.map((p: any) => (
+              {personnel.map((p: AgencyPersonnel) => (
                 <tr key={p.id}>
                   <td><strong>{p.name}</strong></td>
                   <td>{p.email}</td>

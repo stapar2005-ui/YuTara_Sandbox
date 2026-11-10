@@ -176,11 +176,11 @@ export const NOTIFICATION_CONFIG: Record<
   },
   NEW_TITLE_ISSUED: {
     title: "New Title Issued",
-    description: (ctx) => `A new title has been issued for your property transaction.`,
+    description: () => `A new title has been issued for your property transaction.`,
   },
   TRANSACTION_COMPLETED: {
     title: "Transaction Completed",
-    description: (ctx) => `Your land transfer transaction has been completed.`,
+    description: () => `Your land transfer transaction has been completed.`,
   },
   INQUIRY_RECEIVED: {
     title: "New Inquiry",

@@ -1,17 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  ArrowRight,
-  BadgeCheck,
-  Clock,
-  FileText,
-  Lock,
-  Users,
-  ShieldCheck,
-  MapPin,
-} from "lucide-react";
-import { formatMoney } from "@/lib/marketplace";
+import { BadgeCheck, Clock } from "lucide-react";
 import {
   TransactionStage,
   STAGE_LABEL,
@@ -23,7 +13,7 @@ import {
   ProcessingStage,
   StageHistoryEntry,
 } from "@/lib/transaction-stage-service";
-import { readDocumentRequirements } from "@/lib/document-service";
+import { readDocumentRequirements, DocumentRequirement } from "@/lib/document-service";
 
 export function TransactionProgressTracker({
   transactionId,
@@ -40,7 +30,7 @@ export function TransactionProgressTracker({
 }) {
   const [stages, setStages] = useState<ProcessingStage[]>([]);
   const [history, setHistory] = useState<StageHistoryEntry[]>([]);
-  const [documents, setDocuments] = useState<any[]>([]);
+  const [documents, setDocuments] = useState<DocumentRequirement[]>([]);
   const [currentStage, setCurrentStage] = useState<TransactionStage | null>(
     null,
   );
@@ -102,13 +92,10 @@ export function TransactionProgressTracker({
   }
 
   const buyerDocs = documents.filter(
-    (d: any) => d.responsibleParty === "BUYER",
+    (d: DocumentRequirement) => d.responsibleParty === "BUYER",
   );
   const sellerDocs = documents.filter(
-    (d: any) => d.responsibleParty === "SELLER",
-  );
-  const agencyDocs = documents.filter(
-    (d: any) => d.responsibleParty === "AGENCY",
+    (d: DocumentRequirement) => d.responsibleParty === "SELLER",
   );
 
   return (
@@ -208,7 +195,7 @@ export function TransactionProgressTracker({
           <div className="doc-category">
             <h4>Buyer Documents</h4>
             <div className="doc-list">
-              {buyerDocs.map((doc: any) => (
+              {buyerDocs.map((doc: DocumentRequirement) => (
                 <div
                   key={doc.id}
                   className={`doc-item ${doc.status === "ACCEPTED" ? "accepted" : ""} ${doc.status === "REJECTED" ? "rejected" : ""} ${doc.status === "PENDING_SUBMISSION" || doc.status === "NOT_REQUESTED" ? "pending" : ""}`}
@@ -252,7 +239,7 @@ export function TransactionProgressTracker({
           <div className="doc-category">
             <h4>Seller Documents</h4>
             <div className="doc-list">
-              {sellerDocs.map((doc: any) => (
+              {sellerDocs.map((doc: DocumentRequirement) => (
                 <div
                   key={doc.id}
                   className={`doc-item ${doc.status === "ACCEPTED" ? "accepted" : ""} ${doc.status === "REJECTED" ? "rejected" : ""} ${doc.status === "PENDING_SUBMISSION" || doc.status === "NOT_REQUESTED" ? "pending" : ""}`}

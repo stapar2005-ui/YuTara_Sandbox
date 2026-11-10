@@ -34,19 +34,10 @@ import {
 import { readTransactions, Transaction, TRANSACTIONS_EVENT } from "@/lib/transactions";
 import { readReservations, Reservation } from "@/lib/reservation-service";
 import {
-  createReservation,
-  RESERVATION_FEE,
-} from "@/lib/reservation-service";
-import {
-  createBookingRequest,
   respondToBookingRequest,
   getBookingRequestsForSeller,
   BookingRequest,
-  BookingStatus,
 } from "@/lib/booking-service";
-import {
-  createTransactionFromReservation,
-} from "@/lib/transactions";
 import { createNotification } from "@/lib/notification-service";
 
 const LISTING_STATUS_CLASS: Record<string, string> = {
@@ -117,7 +108,7 @@ export default function DashboardPage() {
       window.removeEventListener("storage", sync);
       window.removeEventListener(TRANSACTIONS_EVENT, sync);
     };
-  }, []);
+  }, [session?.email]);
 
   const owned = reservations.filter(
     (reservation) =>
@@ -375,8 +366,8 @@ export default function DashboardPage() {
                                   setToast("Booking approved — reservation created.");
                                   setTimeout(() => setToast(""), 3000);
                                 }
-                              } catch (err: any) {
-                                setToast(err.message || "Failed to approve booking.");
+                              } catch (err: unknown) {
+                                setToast((err as Error).message || "Failed to approve booking.");
                                 setTimeout(() => setToast(""), 3000);
                               }
                             }}
@@ -406,8 +397,8 @@ export default function DashboardPage() {
                                 );
                                 setToast("Booking rejected.");
                                 setTimeout(() => setToast(""), 3000);
-                              } catch (err: any) {
-                                setToast(err.message || "Failed to reject booking.");
+                              } catch (err: unknown) {
+                                setToast((err as Error).message || "Failed to reject booking.");
                                 setTimeout(() => setToast(""), 3000);
                               }
                             }}

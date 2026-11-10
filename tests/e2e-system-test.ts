@@ -12,7 +12,7 @@
  * 8. Verification of Known System Bugs & Failure Modes
  */
 
-import { describe, it, before, beforeEach } from "node:test";
+import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 
 // Setup mock browser environment (window, localStorage, events)
@@ -39,26 +39,26 @@ class MockLocalStorage {
 }
 
 const mockStorage = new MockLocalStorage();
-const eventListeners: Record<string, ((e: any) => void)[]> = {};
+const eventListeners: Record<string, ((e: Event) => void)[]> = {};
 
-(globalThis as any).window = {
+(globalThis as unknown as { window?: unknown }).window = {
   localStorage: mockStorage,
   dispatchEvent: (event: { type: string }) => {
     const list = eventListeners[event.type] || [];
     list.forEach((cb) => cb(event));
     return true;
   },
-  addEventListener: (type: string, listener: (e: any) => void) => {
+  addEventListener: (type: string, listener: (e: Event) => void) => {
     if (!eventListeners[type]) eventListeners[type] = [];
     eventListeners[type].push(listener);
   },
-  removeEventListener: (type: string, listener: (e: any) => void) => {
+  removeEventListener: (type: string, listener: (e: Event) => void) => {
     if (!eventListeners[type]) return;
     eventListeners[type] = eventListeners[type].filter((l) => l !== listener);
   },
 };
 
-(globalThis as any).Event = class {
+(globalThis as unknown as { Event?: unknown }).Event = class {
   type: string;
   constructor(type: string) {
     this.type = type;
@@ -76,7 +76,6 @@ import {
   approvePendingUser,
   denyPendingUser,
   isEmailRegisteredOrPending,
-  DEMO_ACCOUNTS,
 } from "../src/lib/demo-auth.ts";
 
 import {
@@ -90,17 +89,9 @@ import {
 } from "../src/lib/marketplace.ts";
 
 import {
-  readProperties,
-  writeProperties,
-  updateProperty,
-} from "../src/lib/property-store.ts";
-
-import {
   createBookingRequest,
   respondToBookingRequest,
   cancelBookingRequest,
-  getBookingRequestsForBuyer,
-  getBookingRequestsForSeller,
 } from "../src/lib/booking-service.ts";
 
 import {
@@ -113,7 +104,6 @@ import {
 
 import {
   createTransactionFromReservation,
-  readTransactions,
   agencyReview,
   holdPayment,
   prepareDocuments,
@@ -122,16 +112,12 @@ import {
   completeTransaction,
   cancelTransaction,
   stageIndex,
-  STAGE_ORDER,
 } from "../src/lib/transactions.ts";
 
 import {
   createDocumentRequirement,
-  readDocumentRequirements,
   createTransactionDocument,
-  readTransactionDocuments,
   createDocumentReview,
-  readDocumentReviews,
 } from "../src/lib/document-service.ts";
 
 import {
@@ -143,8 +129,6 @@ import {
 } from "../src/lib/verification.ts";
 
 import {
-  promoteLand,
-  endPromotion,
   PROMO_OPTIONS,
 } from "../src/lib/promotions.ts";
 
@@ -152,14 +136,11 @@ import {
   saveProperty,
   unsaveProperty,
   isPropertySaved,
-  readSavedProperties,
 } from "../src/lib/saved-properties.ts";
 
 import {
   addInquiry,
-  readInquiries,
   replyToInquiry,
-  inquiriesForProperty,
 } from "../src/lib/inquiries.ts";
 
 import { notificationsFor } from "../src/lib/notifications.ts";
@@ -874,7 +855,7 @@ describe("YuTara Marketplace E2E System Test Suite", () => {
       const allRes = await readReservations();
       const idx = allRes.findIndex((r) => r.id === reservation.id);
       allRes[idx] = reservation;
-      await (window.localStorage as any).setItem("yutara-reservations", JSON.stringify(allRes));
+      await mockStorage.setItem("yutara-reservations", JSON.stringify(allRes));
 
       // Attempting to reserve with a new buyer should ideally succeed if expired,
       // but the system still considers it active!

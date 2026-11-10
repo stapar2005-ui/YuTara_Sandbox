@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { YuTaraLogo } from "@/components/YuTaraLogo";
-import { clearStoredSession, DemoUser, getStoredSession } from "@/lib/demo-auth";
-import { isAgencyRole, canManageTransactions } from "@/lib/agency-service";
+import { clearStoredSession, DemoUser } from "@/lib/demo-auth";
+import { isAgencyRole } from "@/lib/agency-service";
 import { setStoredTheme } from "@/lib/theme";
 import { useAutoHideHeader } from "@/lib/use-auto-hide-header";
 
@@ -28,6 +29,7 @@ export function AgencyLayout({
   session: DemoUser | null;
   children: React.ReactNode;
 }) {
+  const router = useRouter();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [section, setSection] = useState("overview");
   const headerHidden = useAutoHideHeader();
@@ -129,6 +131,6 @@ export function AgencyLayout({
   function logout() {
     clearStoredSession();
     setStoredTheme("light");
-    window.location.href = "/";
+    router.push("/");
   }
 }

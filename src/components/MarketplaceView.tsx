@@ -1,15 +1,12 @@
 "use client";
 
-"use client";
-
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Bookmark, Filter, Search } from "lucide-react";
+import { ArrowRight, Filter, Search } from "lucide-react";
 import { getListingStatus, isPromotionActive, Property } from "@/lib/marketplace";
 import { PANABO_BARANGAYS } from "@/lib/yutara-config";
 import { PropertyCard } from "./PropertyCard";
 import { PromotedCarousel } from "./PromotedCarousel";
-import { isDemoMode } from "@/lib/runtime-config";
 import { DemoUser } from "@/lib/demo-auth";
 
 export function MarketplaceView({

@@ -791,8 +791,8 @@ export default function Home() {
               setToast("Booking request sent to the seller.");
               setTimeout(() => setToast(""), 3000);
               go("marketplace");
-            } catch (err: any) {
-              setToast(err.message || "Failed to send booking request.");
+            } catch (err: unknown) {
+              setToast((err as Error).message || "Failed to send booking request.");
               setTimeout(() => setToast(""), 3000);
             }
           }}
