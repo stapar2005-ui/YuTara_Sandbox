@@ -43,7 +43,7 @@ const eventListeners: Record<string, ((e: Event) => void)[]> = {};
 
 (globalThis as unknown as { window?: unknown }).window = {
   localStorage: mockStorage,
-  dispatchEvent: (event: { type: string }) => {
+  dispatchEvent: (event: Event) => {
     const list = eventListeners[event.type] || [];
     list.forEach((cb) => cb(event));
     return true;
@@ -761,7 +761,7 @@ describe("YuTara Marketplace E2E System Test Suite", () => {
   // 8. Error Possibilities, Architectural Flaws & Edge Cases
   // -----------------------------------------------------------------------
   describe("8. Verification of Known System Bugs & Failure Modes", () => {
-    it("VERIFIED BUG 1: getStoredSession drops AGENCY roles on page refresh", () => {
+    it("restores agency roles from storage on page refresh", () => {
       // When an agency user logs in:
       const agencyUser = {
         email: "agency.admin@yutara.com",
@@ -772,29 +772,24 @@ describe("YuTara Marketplace E2E System Test Suite", () => {
 
       // When the page reloads or app re-reads session:
       const restored = getStoredSession();
-      // Line 115 of demo-auth.ts only permits 'ADMIN' or 'USER':
-      // `parsed.role === "ADMIN" || parsed.role === "USER"`
-      // So agency roles return null!
-      assert.strictEqual(
-        restored,
-        null,
-        "CONFIRMED BUG: getStoredSession() drops AGENCY_* roles and logs agency personnel out"
-      );
+      assert.deepStrictEqual(restored, agencyUser);
     });
 
-    it("VERIFIED BUG 2: markAllNotificationsRead wipes out all other users' notifications", async () => {
+    it("marks only the current user's notifications as read", async () => {
       // User A receives a notification
       await createNotification({
         userId: "user_a@yutara.com",
         type: "BOOKING_APPROVED",
-        propertyTitle: "Lot A",
+        title: "Booking approved",
+        description: "Lot A",
       });
 
       // User B receives a notification
       await createNotification({
         userId: "user_b@yutara.com",
         type: "NEW_TRANSACTION",
-        propertyTitle: "Lot B",
+        title: "New transaction",
+        description: "Lot B",
       });
 
       // Both users currently have 1 notification
@@ -806,24 +801,20 @@ describe("YuTara Marketplace E2E System Test Suite", () => {
 
       // Check User B's notifications:
       const userBNotifications = await readNotifications("user_b@yutara.com");
-      // CONFIRMED DATA LOSS BUG: markAllNotificationsRead overwrites the whole storage key with only User A's data!
       assert.strictEqual(
         userBNotifications.length,
-        0,
-        "CONFIRMED BUG: markAllNotificationsRead(userA) erased all notifications for userB!"
+        1,
+        "User B's notification should remain after User A marks all as read",
       );
+      assert.strictEqual(userBNotifications[0].isRead, false);
     });
 
-    it("VERIFIED DEFECT 3: resetAllData misses modern tables and uses wrong key for saved properties", () => {
-      // STORAGE_KEYS in reset.ts has "yutara-saved" instead of "yutara-saved-properties"
-      assert.strictEqual(STORAGE_KEYS.includes("yutara-saved"), true);
+    it("resetAllData includes every modern storage key", () => {
       assert.strictEqual(
         STORAGE_KEYS.includes("yutara-saved-properties"),
-        false,
-        "CONFIRMED DEFECT: resetAllData does not wipe 'yutara-saved-properties'"
+        true,
       );
 
-      // Missing modern tables
       const missingKeys = [
         "yutara-booking-requests",
         "yutara-document-requirements",
@@ -838,13 +829,13 @@ describe("YuTara Marketplace E2E System Test Suite", () => {
       for (const key of missingKeys) {
         assert.strictEqual(
           STORAGE_KEYS.includes(key),
-          false,
-          `CONFIRMED DEFECT: resetAllData omits '${key}'`
+          true,
+          `resetAllData should include '${key}'`,
         );
       }
     });
 
-    it("VERIFIED RISK 4: No reservation expiry cron or check on readReservations", async () => {
+    it("expires pending reservations before allowing a new buyer to reserve", async () => {
       // Create an expired reservation manually in storage
       const property = getProperty(1)!;
       const { reservation } = await createReservation(property, "buyer_old@yutara.com");
@@ -857,13 +848,9 @@ describe("YuTara Marketplace E2E System Test Suite", () => {
       allRes[idx] = reservation;
       await mockStorage.setItem("yutara-reservations", JSON.stringify(allRes));
 
-      // Attempting to reserve with a new buyer should ideally succeed if expired,
-      // but the system still considers it active!
       const newRes = await createReservation(property, "buyer_new@yutara.com");
-      assert.ok(
-        newRes.error,
-        "CONFIRMED DEFECT: Expired reservations in PENDING_PAYMENT are never reaped and block subsequent buyers indefinitely"
-      );
+      assert.ok(newRes.reservation);
+      assert.strictEqual(newRes.reservation.buyerId, "buyer_new@yutara.com");
     });
   });
 });

@@ -7,7 +7,13 @@ import { Bell, Menu, X, ChevronRight } from "lucide-react";
 import { YuTaraLogo } from "./YuTaraLogo";
 import { clearStoredSession, DemoUser } from "@/lib/demo-auth";
 import { setStoredTheme } from "@/lib/theme";
-import { readNotifications, markNotificationRead, unreadCount, type Notification } from "@/lib/notification-service";
+import {
+  readNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+  unreadCount,
+  type Notification,
+} from "@/lib/notification-service";
 import { useAutoHideHeader } from "@/lib/use-auto-hide-header";
 
 export function AppNav({ session }: { session: DemoUser | null }) {
@@ -85,7 +91,7 @@ export function AppNav({ session }: { session: DemoUser | null }) {
                         className="notif-mark-all"
                         onClick={() => {
                           if (session?.email) {
-                            markNotificationRead(session.email).then(() => {
+                            markAllNotificationsRead(session.email).then(() => {
                               setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
                               setCount(0);
                               setNotifOpen(false);

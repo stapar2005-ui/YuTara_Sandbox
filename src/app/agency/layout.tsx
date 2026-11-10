@@ -9,6 +9,14 @@ import { isAgencyRole } from "@/lib/agency-service";
 import { setStoredTheme } from "@/lib/theme";
 import { useAutoHideHeader } from "@/lib/use-auto-hide-header";
 
+export default function AgencyRouteLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return <>{children}</>;
+}
+
 const AGENCY_SECTIONS = [
   { key: "overview", label: "Overview", icon: "layout" },
   { key: "transactions", label: "All Transactions", icon: "list" },
