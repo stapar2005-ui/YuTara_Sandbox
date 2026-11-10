@@ -24,6 +24,21 @@ export function SellerTransactions({ email }: { email: string }) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [declineId, setDeclineId] = useState<string | null>(null);
+  const [cancelToast, setCancelToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (cancelToast) {
+      const timer = setTimeout(() => setCancelToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [cancelToast]);
+
+  useEffect(() => {
+    if (cancelToast) {
+      const timer = setTimeout(() => setCancelToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [cancelToast]);
 
   useEffect(() => {
     const sync = async () => {
@@ -195,9 +210,17 @@ export function SellerTransactions({ email }: { email: string }) {
           label="Reason for declining (shared with the buyer)"
           placeholder="e.g. The offered price is below our agreed range."
           confirmLabel="Decline booking"
-          onConfirm={(reason) => cancelTransaction(declineId, "SELLER", reason)}
+          onConfirm={(reason) => {
+            cancelTransaction(declineId, "SELLER", reason).then(() => {
+              setCancelToast("Booking cancelled successfully — property is available again");
+              setDeclineId(null);
+            });
+          }}
           onClose={() => setDeclineId(null)}
         />
+      )}
+      {cancelToast && (
+        <div className="toast">{cancelToast}</div>
       )}
     </div>
   );

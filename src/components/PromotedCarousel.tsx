@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import {
   ArrowRight,
-  Check,
   ChevronLeft,
   ChevronRight,
   Heart,
@@ -98,9 +97,6 @@ export function PromotedCarousel({
   const badges = (
     <div className="featured-badges">
       <span className="badge badge-promoted">Promoted</span>
-      <span className="badge badge-verified">
-        <Check size={12} /> YuTara Verified
-      </span>
     </div>
   );
 

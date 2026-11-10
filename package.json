@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --env-file=.env.local --experimental-transform-types --import ./tests/setup.mjs --loader ./tests/custom-loader.mjs --test tests/e2e-system-test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.0",

@@ -7,6 +7,7 @@ import { YuTaraLogo } from "@/components/YuTaraLogo";
 import { createPendingUser, isEmailRegisteredOrPending } from "@/lib/demo-auth";
 
 export default function RegisterPage() {
+  const [submitting, setSubmitting] = useState(false);
   const [step, setStep] = useState(1);
   const [submitted, setSubmitted] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -32,8 +33,42 @@ export default function RegisterPage() {
 
   const update = (key: keyof typeof form, value: string) => {
     setError("");
-    setForm({ ...form, [key]: value });
+    setForm((current) => ({ ...current, [key]: value }));
   };
+
+  const accountStepComplete =
+    Boolean(form.fullName.trim()) &&
+    Boolean(form.mobile.trim()) &&
+    Boolean(form.email.trim()) &&
+    Boolean(form.password) &&
+    form.password.length >= 6 &&
+    form.password === form.confirmPassword;
+
+  const accountStepError = (): string => {
+    if (!form.fullName.trim()) return "Please enter your full name.";
+    if (!form.mobile.trim()) return "Please enter your mobile number.";
+    if (!form.email.trim()) return "Please enter your email.";
+    if (!form.password) return "Please create a password.";
+    if (form.password.length < 6) {
+      return "Password must be at least 6 characters.";
+    }
+    if (!form.confirmPassword) return "Please confirm your password.";
+    if (form.password !== form.confirmPassword) {
+      return "Passwords do not match.";
+    }
+    return "";
+  };
+
+  function handleFileChange(
+    label: string,
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = event.target.files?.[0];
+    if (file) {
+      const uploadKey = label === "Valid ID #1" ? "id1" : "id2";
+      setUploads((current) => ({ ...current, [uploadKey]: file.name }));
+    }
+  }
 
   function startScan() {
     setScanning(true);
@@ -43,54 +78,71 @@ export default function RegisterPage() {
     }, 1100);
   }
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setError("");
+    setSubmitting(true);
 
-    if (!form.fullName.trim()) {
-      setError("Please enter your full name.");
-      return;
-    }
-    if (!form.mobile.trim()) {
-      setError("Please enter your mobile number.");
-      return;
-    }
-    if (!form.email.trim()) {
-      setError("Please enter your email.");
-      return;
-    }
-    if (!form.password || form.password.length < 6) {
-      setError("Password must be at least 6 characters.");
-      return;
-    }
-    if (form.password !== form.confirmPassword) {
-      setError("Passwords do not match.");
-      return;
-    }
-    if (isEmailRegisteredOrPending(form.email)) {
-      setError("This email is already registered or has a pending application.");
-      return;
-    }
-    if (idUploadCount === 0) {
-      setError("Please upload at least one valid ID.");
-      return;
-    }
-    if (!consent) {
-      setError("Please accept the terms and privacy notice.");
-      return;
-    }
-    if (!faceVerified) {
-      setError("Please complete the face scan.");
-      return;
-    }
+    try {
+      if (!form.fullName.trim()) {
+        setError("Please enter your full name.");
+        setSubmitting(false);
+        return;
+      }
+      if (!form.mobile.trim()) {
+        setError("Please enter your mobile number.");
+        setSubmitting(false);
+        return;
+      }
+      if (!form.email.trim()) {
+        setError("Please enter your email.");
+        setSubmitting(false);
+        return;
+      }
+      if (!form.password || form.password.length < 6) {
+        setError("Password must be at least 6 characters.");
+        setSubmitting(false);
+        return;
+      }
+      if (form.password !== form.confirmPassword) {
+        setError("Passwords do not match.");
+        setSubmitting(false);
+        return;
+      }
+      if (isEmailRegisteredOrPending(form.email)) {
+        setError("This email is already registered or has a pending application.");
+        setSubmitting(false);
+        return;
+      }
+      if (idUploadCount === 0) {
+        setError("Please upload at least one valid ID.");
+        setSubmitting(false);
+        return;
+      }
+      if (!consent) {
+        setError("Please accept the terms and privacy notice.");
+        setSubmitting(false);
+        return;
+      }
+      if (!faceVerified) {
+        setError("Please complete the face scan.");
+        setSubmitting(false);
+        return;
+      }
 
-    createPendingUser({
-      email: form.email,
-      name: form.fullName,
-      password: form.password,
-      id1: uploads["id1"],
-      id2: uploads["id2"] || undefined,
-    });
-    setSubmitted(true);
+      createPendingUser({
+        email: form.email,
+        name: form.fullName,
+        password: form.password,
+        id1: uploads["id1"],
+        id2: uploads["id2"] || undefined,
+      });
+      setSubmitting(false);
+      setSubmitted(true);
+    } catch {
+      setSubmitting(false);
+      setError("Failed to submit application. Please try again.");
+    }
   }
 
   return (
@@ -123,8 +175,14 @@ export default function RegisterPage() {
             <div className="verification-box">
               <h3>Application submitted</h3>
               <p style={{ margin: 0 }}>
-                Your registration has been sent for administrator review. You
-                will be notified once your account is approved or denied.
+                Your registration has been sent for administrator review. Your
+                account is pending and cannot sign in until an administrator
+                approves it. We will notify you using the contact details you
+                submitted once a decision is made.
+              </p>
+              <p className="muted" style={{ margin: "12px 0 0", fontSize: ".8rem" }}>
+                Keep your email and mobile number available. After approval,
+                return here and sign in with the password you created.
               </p>
               <Link
                 className="button button-primary"
@@ -149,25 +207,59 @@ export default function RegisterPage() {
                 </div>
               )}
               <div className="sell-stepper">
-                {["Account", "Valid ID(s)", "Face scan", "Review"].map(
-                  (label, index) => (
-                    <button
-                      type="button"
-                      key={label}
-                      className={
-                        step === index + 1
-                          ? "active"
-                          : step > index + 1
-                            ? "complete"
-                            : ""
-                      }
-                      onClick={() => setStep(index + 1)}
-                    >
-                      <span>{index + 1}</span>
-                      {label}
-                    </button>
-                  ),
-                )}
+                  {["Account", "Valid ID(s)", "Face scan", "Review"].map(
+                    (label, index) => {
+                      const targetStep = index + 1;
+                      const isCurrent = step === targetStep;
+                      const isCompleted = step > targetStep;
+                      const canAccess = isCurrent || isCompleted;
+
+                      const canGoToNext = () => {
+                        if (step === 1) {
+                          return accountStepComplete;
+                        }
+                        if (step === 2) {
+                          return idUploadCount > 0;
+                        }
+                        if (step === 3) {
+                          return faceVerified;
+                        }
+                        return false;
+                      };
+
+                      return (
+                        <button
+                          type="button"
+                          key={label}
+                          disabled={!canAccess}
+                          className={
+                            step === targetStep
+                              ? "active"
+                              : step > targetStep
+                                ? "complete"
+                                : "disabled"
+                          }
+                          onClick={() => {
+                            if (!canAccess) return;
+                            if (targetStep > step) {
+                              // Going forward - validate current step first
+                              if (canGoToNext()) {
+                                setStep(targetStep);
+                              } else {
+                                setError(accountStepError() || "Please complete all required fields before continuing.");
+                              }
+                            } else {
+                              // Going backward - always allow
+                              setStep(targetStep);
+                            }
+                          }}
+                        >
+                          <span>{targetStep}</span>
+                          {label}
+                        </button>
+                      );
+                    },
+                  )}
               </div>
               {step === 1 && (
                 <div className="form-grid">
@@ -241,40 +333,68 @@ export default function RegisterPage() {
                       least one ID is required for registration. A second ID is
                       optional but helps speed up approval.
                     </p>
+                    <p className="muted" style={{ margin: "8px 0 0", fontSize: ".75rem" }}>
+                      YuTara reviews the submitted documents for this MVP
+                      marketplace. This does not replace an official
+                      government or legal ownership check.
+                    </p>
+                    <p style={{ fontSize: ".72rem", color: "#666", marginTop: 4 }}>
+                      Max file size: 5MB. Accepted formats: PDF, JPG, JPEG, PNG.
+                    </p>
                   </div>
                   {["Valid ID #1", "Valid ID #2"].map((label) => (
-                    <label className="document-card" key={label}>
-                      <div>
-                        <strong>{label}</strong>
-                        <p>
-                          {label === "Valid ID #1"
-                            ? "Required for registration"
-                            : "Optional — speeds up approval"}
-                        </p>
-                      </div>
-                      <span className="upload-button">
-                        <input
-                          type="file"
-                          accept=".pdf,.jpg,.jpeg,.png"
-                          onChange={(event) =>
-                            setUploads((current) => ({
-                              ...current,
-                              [label]: event.target.files?.[0]?.name ?? "",
-                            }))
-                          }
-                        />
-                        {uploads[label] ? (
+                    <div className="document-card" key={label}>
+                      {(() => {
+                        const uploadKey =
+                          label === "Valid ID #1" ? "id1" : "id2";
+                        return (
                           <>
-                            <FileCheck2 size={14} style={{ verticalAlign: "-2px", marginRight: 6 }} />
-                            {uploads[label]}
+                            <div>
+                              <strong>{label}</strong>
+                              <p>
+                                {label === "Valid ID #1"
+                                  ? "Required for registration"
+                                  : "Optional — speeds up approval"}
+                              </p>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <input
+                                type="file"
+                                accept=".pdf,.jpg,.jpeg,.png"
+                                className="form-input"
+                                onChange={(event) => handleFileChange(label, event)}
+                              />
+                              {uploads[uploadKey] ? (
+                                <>
+                                  <FileCheck2 size={14} style={{ verticalAlign: "-2px", marginRight: 6 }} />
+                                  <strong style={{ color: "#d79c43" }}>{uploads[uploadKey]}</strong>
+                                </>
+                              ) : (
+                                label === "Valid ID #1"
+                                  ? <button className="button button-primary" type="button">Upload ID #1</button>
+                                  : <button className="button button-gold" type="button">Upload ID #2</button>
+                                )}
+                              {uploads[uploadKey] && (
+                                <button
+                                  className="upload-button upload-button-ghost"
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setUploads((current) => {
+                                      const next = { ...current };
+                                      delete next[uploadKey];
+                                      return next;
+                                    });
+                                  }}
+                                >
+                                  Remove
+                                </button>
+                              )}
+                            </div>
                           </>
-                        ) : (
-                          label === "Valid ID #1"
-                            ? "Upload required ID"
-                            : "Upload optional ID"
-                        )}
-                      </span>
-                    </label>
+                        );
+                      })()}
+                    </div>
                   ))}
                   {idUploadCount === 0 && (
                     <p className="muted" style={{ marginTop: 10 }}>
@@ -298,7 +418,8 @@ export default function RegisterPage() {
                   <p>Position your face inside the frame.</p>
                   <p className="muted" style={{ fontSize: ".75rem" }}>
                     Face verification confirms a live person and helps reduce
-                    fraudulent accounts.
+                    fraudulent accounts. <strong>This is simulated in the MVP
+                    and does not perform biometric identity verification.</strong>
                   </p>
                   {!faceVerified && (
                     <button
@@ -327,8 +448,36 @@ export default function RegisterPage() {
                     <strong>Buy and sell land</strong>
                   </div>
                   <div className="review-row">
+                    <span>Full name</span>
+                    <strong>{form.fullName}</strong>
+                  </div>
+                  <div className="review-row">
+                    <span>Mobile number</span>
+                    <strong>{form.mobile}</strong>
+                  </div>
+                  <div className="review-row">
+                    <span>Email address</span>
+                    <strong>{form.email}</strong>
+                  </div>
+                  <div className="review-row">
                     <span>ID(s) uploaded</span>
                     <strong>{idUploadCount} valid ID(s)</strong>
+                  </div>
+                  {uploads["id1"] && (
+                    <div className="review-row">
+                      <span>ID document #1</span>
+                      <strong>{uploads["id1"]}</strong>
+                    </div>
+                  )}
+                  {uploads["id2"] && (
+                    <div className="review-row">
+                      <span>ID document #2</span>
+                      <strong>{uploads["id2"]}</strong>
+                    </div>
+                  )}
+                  <div className="review-row">
+                    <span>Face verification</span>
+                    <strong>Completed</strong>
                   </div>
                   <label
                     className="check-label"
@@ -341,6 +490,11 @@ export default function RegisterPage() {
                     />{" "}
                     I agree to the YuTara terms and privacy notice.
                   </label>
+                  {!consent && (
+                    <p className="muted" style={{ margin: "8px 0 0", fontSize: ".75rem" }}>
+                      Please check this box to submit your application.
+                    </p>
+                  )}
                 </div>
               )}
               <div className="registration-actions">
@@ -357,7 +511,29 @@ export default function RegisterPage() {
                   <button
                     type="button"
                     className="button button-primary"
-                    onClick={() => setStep(step + 1)}
+                    onClick={() => {
+                      if (step === 1) {
+                        if (
+                          accountStepComplete
+                        ) {
+                          setStep(step + 1);
+                        } else {
+                          setError(accountStepError() || "Please complete all required fields before continuing.");
+                        }
+                      } else if (step === 2) {
+                        if (idUploadCount > 0) {
+                          setStep(step + 1);
+                        } else {
+                          setError("Please upload at least one valid ID before continuing.");
+                        }
+                      } else if (step === 3) {
+                        if (faceVerified) {
+                          setStep(step + 1);
+                        } else {
+                          setError("Please complete the face scan before continuing.");
+                        }
+                      }
+                    }}
                   >
                     Continue <ArrowRight size={15} />
                   </button>
@@ -366,6 +542,7 @@ export default function RegisterPage() {
                     className="button button-primary"
                     type="submit"
                     disabled={
+                      submitting ||
                       idUploadCount === 0 ||
                       !consent ||
                       !faceVerified ||
@@ -377,7 +554,8 @@ export default function RegisterPage() {
                       form.password !== form.confirmPassword
                     }
                   >
-                    Submit application <ArrowRight size={15} />
+                    {submitting ? "Submitting..." : "Submit application "}
+                    <ArrowRight size={15} />
                   </button>
                 )}
               </div>

@@ -1,4 +1,4 @@
-import { SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
  * Storage adapter interface.
@@ -77,6 +77,8 @@ export class LocalStorageAdapter implements StorageAdapter {
  * constructor in each store file.
  */
 export class SupabaseAdapter implements StorageAdapter {
+  private readonly local = new LocalStorageAdapter();
+
   constructor(private supabaseClient: SupabaseClient, private table: string) {}
 
   async getItem<T>(key: string): Promise<T | null> {
@@ -84,8 +86,8 @@ export class SupabaseAdapter implements StorageAdapter {
       .from(this.table)
       .select("value")
       .eq("id", key)
-      .single();
-    if (error || !data) return null;
+      .maybeSingle();
+    if (error || !data) return this.local.getItem<T>(key);
     return (data.value as T) ?? null;
   }
 
@@ -95,7 +97,7 @@ export class SupabaseAdapter implements StorageAdapter {
       value,
       updated_at: new Date().toISOString(),
     });
-    return !error;
+    return error ? this.local.setItem(key, value) : true;
   }
 
   async removeItem(key: string): Promise<boolean> {
@@ -103,14 +105,15 @@ export class SupabaseAdapter implements StorageAdapter {
       .from(this.table)
       .delete()
       .eq("id", key);
-    return !error;
+    return error ? this.local.removeItem(key) : true;
   }
 
   async clear(): Promise<void> {
-    await this.supabaseClient
+    const { error } = await this.supabaseClient
       .from(this.table)
       .delete()
       .neq("id", "00000000-0000-0000-0000-000000000000");
+    if (error) await this.local.clear();
   }
 
   onChange(callback: (key: string) => void): () => void {
@@ -157,7 +160,7 @@ export class ProfileAdapter implements StorageAdapter {
       .from(this.table)
       .select("value")
       .eq("id", this.key)
-      .single();
+      .maybeSingle();
     if (error || !data) return null;
     return (data.value as T) ?? null;
   }

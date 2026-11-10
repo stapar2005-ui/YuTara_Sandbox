@@ -24,6 +24,14 @@ export function BuyerTransactions({ email }: { email: string }) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [cancelId, setCancelId] = useState<string | null>(null);
+  const [cancelToast, setCancelToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (cancelToast) {
+      const timer = setTimeout(() => setCancelToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [cancelToast]);
 
   useEffect(() => {
     const sync = async () => {
@@ -198,9 +206,17 @@ export function BuyerTransactions({ email }: { email: string }) {
           label="Reason for cancelling (shared with the seller)"
           placeholder="e.g. I found another property."
           confirmLabel="Cancel booking"
-          onConfirm={(reason) => cancelTransaction(cancelId, "BUYER", reason)}
+          onConfirm={(reason) => {
+            cancelTransaction(cancelId, "BUYER", reason).then(() => {
+              setCancelToast("Booking cancelled successfully — property is available again");
+              setCancelId(null);
+            });
+          }}
           onClose={() => setCancelId(null)}
         />
+      )}
+      {cancelToast && (
+        <div className="toast">{cancelToast}</div>
       )}
     </div>
   );

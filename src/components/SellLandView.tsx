@@ -1,17 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import {
-  ArrowLeft,
-  ArrowRight,
-  FileCheck2,
-  Inbox,
-  MapPin,
-  MessageCircle,
-  Plus,
-  Send,
-  Wallet,
-} from "lucide-react";
+import { ArrowLeft, ArrowRight, FileCheck2, Inbox, MapPin, MessageCircle, Plus, Send, Wallet } from "lucide-react";
 import { SellerTransactions } from "./SellerTransactions";
 import { money, Property } from "@/lib/marketplace";
 import {
@@ -32,32 +22,6 @@ type SellForm = {
   description: string;
   image: string;
 };
-
-/** Read an image file and downscale it to a small data URL for local storage. */
-async function resizeImage(file: File): Promise<string> {
-  const dataUrl = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error("Could not read the image."));
-    reader.readAsDataURL(file);
-  });
-  return new Promise<string>((resolve) => {
-    const image = new window.Image();
-    image.onload = () => {
-      const max = 800;
-      const scale = Math.min(1, max / Math.max(image.width, image.height));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(image.width * scale);
-      canvas.height = Math.round(image.height * scale);
-      const context = canvas.getContext("2d");
-      if (!context) return resolve(dataUrl);
-      context.drawImage(image, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL("image/jpeg", 0.6));
-    };
-    image.onerror = () => resolve(dataUrl);
-    image.src = dataUrl;
-  });
-}
 
 export function SellLandView({
   properties,
@@ -201,7 +165,7 @@ export function SellLandView({
             className={tab === "new" ? "active" : ""}
             onClick={() => setTab("new")}
           >
-            <Plus size={15} /> Sell land
+            <Plus size={15} /> List land
           </button>
           <button
             className={tab === "transactions" ? "active" : ""}
@@ -219,8 +183,8 @@ export function SellLandView({
                 <h2 className="display">Incoming transactions</h2>
               </div>
               <p>
-                Track every buyer payment and release escrow only when the
-                ownership transfer is complete.
+                Track every buyer payment and transfer coordination through the
+                affiliated agency.
               </p>
             </div>
             <SellerTransactions email={sellerEmail} />
@@ -241,7 +205,7 @@ export function SellLandView({
                   className="button button-primary"
                   onClick={() => setTab("new")}
                 >
-                  Sell land <ArrowRight size={15} />
+                  List land <ArrowRight size={15} />
                 </button>
               </div>
             ) : (
@@ -428,14 +392,16 @@ export function SellLandView({
                 <h2 className="display">Tell us about the land.</h2>
               </div>
               <p>
-                Your listing is published to the marketplace right away. The
-                partner agency will coordinate the transaction when a buyer is
-                ready.
+                Provide the basic property information below. Your listing will
+                be published as open for offers once you submit. Ownership
+                documents are not required at the listing stage — the affiliated
+                agency will handle document collection during the transfer
+                process.
               </p>
             </div>
             <div className="table-wrap" style={{ padding: 22 }}>
               <div className="sell-stepper">
-                {["Property", "Details", "Review"].map(
+                {["Property", "Review"].map(
                   (label, index) => (
                     <button
                       key={label}
@@ -446,11 +412,7 @@ export function SellLandView({
                             ? "complete"
                             : ""
                       }
-                      onClick={() => {
-                        if (step === 1 && !validateStep1() && index + 1 > 1)
-                          return;
-                        setStep(index + 1);
-                      }}
+                      onClick={() => setStep(index + 1)}
                     >
                       <span>{index + 1}</span>
                       {label}
@@ -584,39 +546,6 @@ export function SellLandView({
                 )}
               </div>
               {step === 2 && (
-                <div
-                  className="form-grid"
-                  style={{
-                    gridTemplateColumns:
-                      "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
-                  }}
-                >
-                  <label>
-                    Registered owner name
-                    <input
-                      className="form-input"
-                      placeholder="Name as it appears on ownership documents"
-                    />
-                  </label>
-                  <label>
-                    Ownership status
-                    <select className="form-input">
-                      <option>Registered owner</option>
-                      <option>Authorized representative</option>
-                      <option>Joint owner</option>
-                      <option>Other</option>
-                    </select>
-                  </label>
-                  <label style={{ gridColumn: "1 / -1" }}>
-                    Ownership notes
-                    <textarea
-                      className="form-input form-textarea"
-                      placeholder="Share relevant authority, succession, or co-ownership context."
-                    />
-                  </label>
-                </div>
-              )}
-              {step === 3 && (
                 <div className="review-panel">
                   <div className="review-row">
                     <span>Property</span>
@@ -644,7 +573,8 @@ export function SellLandView({
                       }
                     />{" "}
                     I confirm the information is accurate to the best of my
-                    knowledge.
+                    knowledge. I understand that property details are provided by
+                    the seller and not independently verified by YuTara.
                   </label>
                 </div>
               )}
@@ -667,6 +597,11 @@ export function SellLandView({
                     By submitting, you confirm this property is located within
                     Panabo City, Davao del Norte.
                   </p>
+                  <p style={{ margin: "6px 0 0", fontSize: ".8rem" }}>
+                    Listing information is provided by the seller. YuTara does
+                    not independently establish legal ownership at the listing
+                    stage.
+                  </p>
                 </div>
                 {step > 1 && (
                   <button
@@ -676,7 +611,7 @@ export function SellLandView({
                     Back
                   </button>
                 )}
-                {step < 3 ? (
+                {step < 2 ? (
                   <button
                     className="button button-primary"
                     onClick={handleNextStep}
@@ -699,4 +634,29 @@ export function SellLandView({
       </div>
     </main>
   );
+}
+
+async function resizeImage(file: File): Promise<string> {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("Could not read the image."));
+    reader.readAsDataURL(file);
+  });
+  return new Promise<string>((resolve) => {
+    const image = new window.Image();
+    image.onload = () => {
+      const max = 800;
+      const scale = Math.min(1, max / Math.max(image.width, image.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(image.width * scale);
+      canvas.height = Math.round(image.height * scale);
+      const context = canvas.getContext("2d");
+      if (!context) return resolve(dataUrl);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.6));
+    };
+    image.onerror = () => resolve(dataUrl);
+    image.src = dataUrl;
+  });
 }

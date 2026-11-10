@@ -86,7 +86,7 @@ export function TransactionRecords({ transaction }: { transaction: Transaction }
                     <span
                       className={`status ${payment.status === "PAID" ? "verified" : payment.status === "RELEASED" ? "open_for_offers" : "review"}`}
                     >
-                      {payment.status}
+                      {payment.status}{payment.status === "PAID" || payment.status === "RELEASED" ? " (demo)" : ""}
                     </span>
                   </td>
                   <td>{formatTimestamp(payment.paidAt)}</td>

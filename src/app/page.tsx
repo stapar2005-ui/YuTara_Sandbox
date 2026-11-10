@@ -63,7 +63,6 @@ import { MarketplaceView } from "@/components/MarketplaceView";
 import { PropertyDetailView } from "@/components/PropertyDetailView";
 import { SellLandView, SellerTab } from "@/components/SellLandView";
 import { AdminView } from "@/components/AdminView";
-import { AgencyTransactionDesk } from "@/components/agency/AgencyTransactionDesk";
 import { Modal } from "@/components/Modal";
 
 type View = "home" | "marketplace" | "property" | "seller" | "admin";
@@ -403,7 +402,7 @@ export default function Home() {
 
   return (
     <div className="app-shell">
-      <header className={`topbar ${headerHidden ? "topbar-hidden" : ""}`}>
+      <header className={`topbar topbar-transparent ${headerHidden ? "topbar-hidden" : ""}`}>
         <div className="container nav">
           <button
             onClick={() => {
@@ -423,7 +422,6 @@ export default function Home() {
                 Home
               </button>
               <button onClick={() => go("marketplace")}>Marketplace</button>
-              {session && <Link href="/dashboard">Dashboard</Link>}
               <button
                 onClick={() =>
                   document
@@ -613,35 +611,26 @@ export default function Home() {
       </header>
       {view === "home" && (
         <>
-          <section className="hero">
-            <div className="container hero-content">
+          <section className="hero hero-dark">
+            <div className="hero-content">
               <div className="eyebrow">Currently serving Panabo City</div>
               <h1 className="display">
-                Yuta ba?
+                Welcome to
                 <br />
-                <em>YuTara.</em>
+                <em className="brand-em">YuTara.</em>
               </h1>
-              <p>
-                Find land in Panabo City with confidence. YuTara connects
-                buyers and sellers through a trusted local marketplace.
+              <p className="hero-subhead">
+                Hub for Panabo City where land buyers and sellers can connect,
+                match, negotiate, and secure Power Purchase Agreements (PPAs).
+                Here we make land transactions simple and accessible.
               </p>
               <div className="hero-actions">
                 <button
                   className="button button-primary"
                   onClick={goToHomeMarketplace}
                 >
-                  Explore Panabo City properties <ArrowRight size={16} />
+                  Get started <ArrowRight size={16} />
                 </button>
-              </div>
-              <div className="hero-note">
-                <span className="seal">
-                  <Users size={17} />
-                </span>
-                <span>
-                  <strong>Agency-powered transactions.</strong> The partner
-                  agency handles escrow, documents, and the transfer from
-                  listing to closing.
-                </span>
               </div>
             </div>
           </section>
@@ -726,7 +715,7 @@ export default function Home() {
                   className="button button-primary"
                   onClick={() => go("marketplace")}
                 >
-                  Open marketplace <ArrowRight size={15} />
+                  Browse listings <ArrowRight size={15} />
                 </button>
               </div>
             </div>
@@ -756,6 +745,7 @@ export default function Home() {
             window.scrollTo({ top: 0, behavior: "smooth" });
           }}
           onSell={() => openSeller("new")}
+          session={session}
         />
       )}
       {view === "property" && selected && (
@@ -773,15 +763,38 @@ export default function Home() {
             );
             setInquiryOpen(true);
           }}
-          onReserve={() => {
-            if (session?.email && selected.sellerEmail === session.email) {
-              setToast("You can't reserve your own listing");
+          onRequestBooking={async () => {
+            if (!session) {
+              router.push(`/login?next=/property/${selected.id}`);
+              return;
+            }
+            if (selected.sellerEmail === session.email) {
+              setToast("You cannot request a booking on your own listing.");
               setTimeout(() => setToast(""), 2500);
               return;
             }
-            if (!session)
-              return router.push(`/login?next=/reservation/${selected.id}`);
-            router.push(`/reservation/${selected.id}`);
+            try {
+              const { createBookingRequest } = await import(
+                "@/lib/booking-service"
+              );
+              await createBookingRequest({
+                propertyId: selected.id,
+                propertyTitle: selected.title,
+                buyerId: session.email,
+                buyerName: session.name,
+                buyerEmail: session.email,
+                sellerId: selected.sellerEmail || "seller@yutara.com",
+                sellerName: selected.seller,
+                message:
+                  "Hello, I am interested in booking this property. Please review my request.",
+              });
+              setToast("Booking request sent to the seller.");
+              setTimeout(() => setToast(""), 3000);
+              go("marketplace");
+            } catch (err: any) {
+              setToast(err.message || "Failed to send booking request.");
+              setTimeout(() => setToast(""), 3000);
+            }
           }}
         />
       )}
@@ -847,9 +860,12 @@ export default function Home() {
             <div className="container">
               <div className="eyebrow">Agency transactions</div>
               <h2 className="display">
-                Bookings handled by the partner agency
+                Agency-managed transactions
               </h2>
-              <AgencyTransactionDesk />
+              <p className="muted">
+                Refer to the Agency Portal at /agency for full transaction
+                management.
+              </p>
             </div>
           </section>
         </>

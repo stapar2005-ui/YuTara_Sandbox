@@ -1,5 +1,6 @@
-import { MarketplaceProperty } from "./marketplace";
-import { Reservation } from "./reservation-service";
+import type { MarketplaceProperty } from "./marketplace";
+import type { Reservation } from "./reservation-service";
+import { cancelReservation } from "./reservation-service";
 import { SupabaseAdapter } from "./storage-adapter";
 import { supabase } from "./supabase";
 
@@ -412,6 +413,13 @@ export async function cancelTransaction(
   actor: TransactionActor,
   reason: string,
 ): Promise<Transaction | null> {
+  const transaction = await readTransactions().then((txs) =>
+    txs.find((tx) => tx.id === id),
+  );
+  if (!transaction) return null;
+  if (transaction.stage === "COMPLETED") return transaction;
+  // Cancel the reservation as well
+  await cancelReservation(transaction.reservationId);
   return updateTransaction(id, (tx) => {
     if (tx.stage === "COMPLETED") return tx;
     return {

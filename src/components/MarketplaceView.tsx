@@ -1,12 +1,16 @@
 "use client";
 
+"use client";
+
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Filter, Search } from "lucide-react";
+import { ArrowRight, Bookmark, Filter, Search } from "lucide-react";
 import { getListingStatus, isPromotionActive, Property } from "@/lib/marketplace";
 import { PANABO_BARANGAYS } from "@/lib/yutara-config";
 import { PropertyCard } from "./PropertyCard";
 import { PromotedCarousel } from "./PromotedCarousel";
+import { isDemoMode } from "@/lib/runtime-config";
+import { DemoUser } from "@/lib/demo-auth";
 
 export function MarketplaceView({
   query,
@@ -26,6 +30,7 @@ export function MarketplaceView({
   toggleSave,
   onOpen,
   onSell,
+  session,
 }: {
   query: string;
   setQuery: (value: string) => void;
@@ -44,6 +49,7 @@ export function MarketplaceView({
   toggleSave: (id: number) => void;
   onOpen: (property: Property) => void;
   onSell: () => void;
+  session: DemoUser | null;
 }) {
   const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -91,7 +97,7 @@ export function MarketplaceView({
               land marketplace.
             </h1>
               <p className="muted">
-                Discover verified properties available across Panabo City.
+                Discover properties available across Panabo City.
               </p>
             </div>
           </div>
@@ -184,6 +190,27 @@ export function MarketplaceView({
             >
               Clear all
             </button>
+            {session && (
+              <div className="filter-group" style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--line)" }}>
+                <label>Saved Lands</label>
+                <p className="muted" style={{ fontSize: ".8rem", marginBottom: 10 }}>
+                  Bookmark properties you are interested in.
+                </p>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    className="button button-ghost full-button"
+                    onClick={() => {
+                      // Navigate to dashboard saved lands tab
+                    }}
+                  >
+                    View Saved
+                  </button>
+                </div>
+                <p className="muted" style={{ fontSize: ".75rem", marginTop: 8 }}>
+                  {saved.length} saved property{saved.length !== 1 ? "s" : ""}
+                </p>
+              </div>
+            )}
           </aside>
           <section>
             <button

@@ -46,14 +46,15 @@ export default function VerifiedMapPage() {
         <div className="container">
           <div className="map-heading">
             <div>
-              <div className="eyebrow">Verified Map</div>
+              <div className="eyebrow">View map</div>
               <h1 className="display">Discover verified land with confidence.</h1>
               <p className="muted">
-                Explore verified properties, locations, and available road access in Panabo City.
+                Explore the same active listings available in card view, with
+                location and road-access context in Panabo City.
               </p>
             </div>
             <Link className="button button-ghost" href="/?view=marketplace">
-              Browse cards
+              Browse listings
             </Link>
           </div>
           <div className="map-layout">

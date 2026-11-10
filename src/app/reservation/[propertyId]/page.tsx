@@ -123,6 +123,11 @@ export default function ReservationPage() {
             Review your reservation and complete the reservation payment to hold
             this property.
           </p>
+          <p className="muted" style={{ fontSize: ".72rem", color: "#666", marginTop: 8 }}>
+            <span style={{ color: "#d79c43", fontWeight: 700 }}>&gt;</span> MVP
+            demo: no real payment is processed. The ₱25,000 reservation fee
+            and 48-hour hold are simulated.
+          </p>
           {error ? (
             <div className="status-message reservation-error">
               {error}

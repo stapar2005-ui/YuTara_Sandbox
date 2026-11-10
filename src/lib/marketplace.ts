@@ -2,6 +2,8 @@ import { PANABO_BARANGAYS, YUTARA_SERVICE_AREA } from "./yutara-config";
 
 export type ListingStatus =
   | "OPEN_FOR_OFFERS"
+  | "BOOKING_REQUESTED"
+  | "RESERVED"
   | "CLOSED"
   | "SOLD"
   | "TERMINATED";
@@ -56,6 +58,9 @@ export const getListingStatus = (property: MarketplaceProperty): ListingStatus =
   property.listingStatus || "OPEN_FOR_OFFERS";
 
 export const isActiveListing = (property: MarketplaceProperty): boolean =>
+  getListingStatus(property) === "OPEN_FOR_OFFERS";
+
+export const isBookableListing = (property: MarketplaceProperty): boolean =>
   getListingStatus(property) === "OPEN_FOR_OFFERS";
 
 export const isPromotionActive = (property: MarketplaceProperty): boolean => {
@@ -417,7 +422,11 @@ export const MARKETPLACE_PROPERTIES: MarketplaceProperty[] = allRawProperties.ma
         ? "SOLD"
         : [6, 14, 18].includes(prop.id)
           ? "TERMINATED"
-          : "OPEN_FOR_OFFERS";
+          : [7, 13].includes(prop.id)
+            ? "BOOKING_REQUESTED"
+            : [8].includes(prop.id)
+              ? "RESERVED"
+              : "OPEN_FOR_OFFERS";
 
     return {
       id: prop.id,

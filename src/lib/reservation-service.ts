@@ -1,4 +1,4 @@
-import { MarketplaceProperty } from "./marketplace";
+import type { MarketplaceProperty } from "./marketplace";
 import { SupabaseAdapter } from "./storage-adapter";
 import { supabase } from "./supabase";
 
@@ -34,18 +34,42 @@ export async function readReservations(): Promise<Reservation[]> {
   const stored = await storage.getItem<Reservation[]>(KEY);
   if (!stored) return [];
   try {
-    return stored.filter(
+    const now = new Date();
+    const filtered = stored.filter(
       (item): item is Reservation =>
         Boolean(
           item &&
-            typeof item === "object" &&
-            typeof item.id === "string" &&
-            typeof item.propertyId === "number" &&
-            typeof item.buyerId === "string" &&
-            typeof item.status === "string" &&
-            typeof item.reservationFee === "number",
+          typeof item === "object" &&
+          typeof item.id === "string" &&
+          typeof item.propertyId === "number" &&
+          typeof item.buyerId === "string" &&
+          typeof item.status === "string" &&
+          typeof item.reservationFee === "number",
         ),
     );
+
+    // Auto-expire reservations past their expiresAt timestamp
+    const next: Reservation[] = filtered.map((item) => {
+      if (
+        item.status === "PENDING_PAYMENT" &&
+        item.expiresAt &&
+        new Date(item.expiresAt).getTime() <= now.getTime()
+      ) {
+        return {
+          ...item,
+          status: "EXPIRED" as ReservationStatus,
+          updatedAt: now.toISOString(),
+        };
+      }
+      return item;
+    });
+
+    // Persist status changes so expiry is reflected across tabs/sessions
+    if (next.some((item, i) => item.status !== filtered[i].status)) {
+      await writeReservations(next);
+    }
+
+    return next;
   } catch {
     return [];
   }
@@ -113,6 +137,22 @@ export async function confirmSimulatedPayment(
     status: "RESERVED",
     paymentId: `SIM-${Date.now()}`,
     paymentMethod: method,
+    updatedAt: new Date().toISOString(),
+  };
+  reservations[index] = updated;
+  await writeReservations(reservations);
+  return updated;
+}
+
+export async function cancelReservation(
+  reservationId: string,
+): Promise<Reservation | null> {
+  const reservations = await readReservations();
+  const index = reservations.findIndex((item) => item.id === reservationId);
+  if (index < 0) return null;
+  const updated: Reservation = {
+    ...reservations[index],
+    status: "CANCELLED",
     updatedAt: new Date().toISOString(),
   };
   reservations[index] = updated;

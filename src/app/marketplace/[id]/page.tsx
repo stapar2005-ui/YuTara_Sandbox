@@ -134,6 +134,11 @@ export default function PropertyRoute() {
               <span className="badge badge-verified">
                 <Check size={12} /> YuTara verified
               </span>
+              <p className="muted" style={{ fontSize: ".76rem", margin: "8px 0 0" }}>
+                Verified means the listing information and submitted documents
+                were reviewed for this MVP. It does not replace an official
+                survey, title search, or independent legal due diligence.
+              </p>
               <h1 className="display">{property.title}</h1>
               <div className="property-location">
                 <MapPin size={15} /> {property.barangay}, {property.city}

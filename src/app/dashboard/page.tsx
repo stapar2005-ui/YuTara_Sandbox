@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import {
   BadgeCheck,
   Bookmark,
-  Check,
   MapPin,
   Megaphone,
   Store,
+  Undo2,
   Users,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
@@ -31,8 +31,23 @@ import {
   promoteLand,
   promotionEndLabel,
 } from "@/lib/promotions";
-import { readTransactions, Transaction } from "@/lib/transactions";
+import { readTransactions, Transaction, TRANSACTIONS_EVENT } from "@/lib/transactions";
 import { readReservations, Reservation } from "@/lib/reservation-service";
+import {
+  createReservation,
+  RESERVATION_FEE,
+} from "@/lib/reservation-service";
+import {
+  createBookingRequest,
+  respondToBookingRequest,
+  getBookingRequestsForSeller,
+  BookingRequest,
+  BookingStatus,
+} from "@/lib/booking-service";
+import {
+  createTransactionFromReservation,
+} from "@/lib/transactions";
+import { createNotification } from "@/lib/notification-service";
 
 const LISTING_STATUS_CLASS: Record<string, string> = {
   OPEN_FOR_OFFERS: "verified",
@@ -61,7 +76,9 @@ export default function DashboardPage() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [bookingRequests, setBookingRequests] = useState<BookingRequest[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [toast, setToast] = useState("");
   const [promoteId, setPromoteId] = useState<number | null>(null);
   const [promoteDays, setPromoteDays] = useState(30);
 
@@ -80,26 +97,38 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const sync = async () => {
-      const [props, txs] = await Promise.all([
+      const [props, txs, bookings] = await Promise.all([
         readProperties(),
         readTransactions(),
+        getBookingRequestsForSeller(session?.email ?? ""),
       ]);
       setProperties(props);
       setTransactions(txs);
+      setBookingRequests(bookings);
       setLoaded(true);
     };
     const timer = window.setTimeout(sync, 0);
     window.addEventListener(PROPERTIES_EVENT, sync);
     window.addEventListener("storage", sync);
+    window.addEventListener(TRANSACTIONS_EVENT, sync);
     return () => {
       window.clearTimeout(timer);
       window.removeEventListener(PROPERTIES_EVENT, sync);
       window.removeEventListener("storage", sync);
+      window.removeEventListener(TRANSACTIONS_EVENT, sync);
     };
   }, []);
 
   const owned = reservations.filter(
-    (reservation) => reservation.buyerId === session?.email,
+    (reservation) =>
+      reservation.buyerId === session?.email &&
+      reservation.status !== "CANCELLED",
+  );
+
+  const cancelled = reservations.filter(
+    (reservation) =>
+      reservation.buyerId === session?.email &&
+      reservation.status === "CANCELLED",
   );
 
   const myListings = session
@@ -217,7 +246,7 @@ export default function DashboardPage() {
                     />
                     <div className="property-body">
                       <span className="badge badge-status">
-                        <Check size={12} /> Listed
+                        {reservation.status.charAt(0).toUpperCase() + reservation.status.slice(1).toLowerCase()}
                       </span>
                       <h3>{property.title}</h3>
                       <p className="property-location">
@@ -248,7 +277,202 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* Land on Sale */}
+          {/* Booking Requests (Seller) */}
+          {session && bookingRequests.length > 0 && (
+            <>
+              <div className="dashboard-heading" style={{ marginTop: 46 }}>
+                <div>
+                  <div className="eyebrow">Booking Requests</div>
+                  <h2 className="display">
+                    Pending buyer booking requests
+                  </h2>
+                </div>
+                <p className="muted">
+                  Review and approve or reject booking requests from buyers.
+                  Approving a request creates a reservation for the property.
+                </p>
+              </div>
+              <div className="dashboard-grid">
+                {bookingRequests.map((booking) => {
+                  const property = properties.find(
+                    (item) => item.id === booking.propertyId,
+                  );
+                  if (!property) return null;
+                  return (
+                    <article className="asset-card" key={booking.id}>
+                      <div
+                        className="asset-image"
+                        style={{
+                          backgroundImage: `url(${property.image})`,
+                          backgroundPosition: property.imagePosition || "center",
+                        }}
+                      />
+                      <div className="property-body">
+                        <span className="badge badge-status" style={{ backgroundColor: "#d97706", color: "#ffffff" }}>
+                          Pending
+                        </span>
+                        <h3>{booking.propertyTitle}</h3>
+                        <p className="property-location">
+                          <MapPin size={14} /> {property.barangay}, {property.city}
+                        </p>
+                        <div className="property-meta">
+                          <strong className="price">
+                            {formatMoney(property.price)}
+                          </strong>
+                          <span className="area">
+                            {property.area.toLocaleString()} sqm
+                          </span>
+                        </div>
+                        <div className="muted" style={{ marginTop: 8, fontSize: ".8rem" }}>
+                          <strong>Buyer:</strong> {booking.buyerName} ({booking.buyerEmail})
+                        </div>
+                        <div className="muted" style={{ marginTop: 4, fontSize: ".8rem" }}>
+                          <strong>Message:</strong> {booking.message}
+                        </div>
+                        <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
+                          <button
+                            className="button button-primary"
+                            onClick={async () => {
+                              try {
+                                const updated = await respondToBookingRequest(
+                                  booking.id,
+                                  "APPROVED",
+                                  session.email,
+                                  "Approved by seller",
+                                );
+                                if (updated) {
+                                  // Create reservation
+                                  const { createReservation } = await import(
+                                    "@/lib/reservation-service"
+                                  );
+                                  const { createTransactionFromReservation } = await import(
+                                    "@/lib/transactions"
+                                  );
+                                  const { createNotification } = await import(
+                                    "@/lib/notification-service"
+                                  );
+
+                                  const res = await createReservation(property, booking.buyerId);
+                                  if (res.reservation) {
+                                    await createTransactionFromReservation({
+                                      reservation: res.reservation,
+                                      property,
+                                      buyerName: booking.buyerName,
+                                      sellerName: property.seller,
+                                    });
+                                    await createNotification({
+                                      userId: booking.buyerId,
+                                      type: "BOOKING_APPROVED",
+                                      title: "Booking Approved",
+                                      description: `The seller approved your booking request for ${property.title}.`,
+                                      transactionReference: res.reservation.id,
+                                      actionUrl: `/dashboard`,
+                                    });
+                                  }
+                                  setBookingRequests((prev) =>
+                                    prev.filter((b) => b.id !== booking.id),
+                                  );
+                                  setToast("Booking approved — reservation created.");
+                                  setTimeout(() => setToast(""), 3000);
+                                }
+                              } catch (err: any) {
+                                setToast(err.message || "Failed to approve booking.");
+                                setTimeout(() => setToast(""), 3000);
+                              }
+                            }}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            className="button button-danger"
+                            onClick={async () => {
+                              try {
+                                await respondToBookingRequest(
+                                  booking.id,
+                                  "REJECTED",
+                                  session.email,
+                                  "Rejected by seller",
+                                );
+                                await createNotification({
+                                  userId: booking.buyerId,
+                                  type: "BOOKING_REJECTED",
+                                  title: "Booking Rejected",
+                                  description: `The seller rejected your booking request for ${property.title}.`,
+                                  transactionReference: booking.id,
+                                  actionUrl: `/dashboard`,
+                                });
+                                setBookingRequests((prev) =>
+                                  prev.filter((b) => b.id !== booking.id),
+                                );
+                                setToast("Booking rejected.");
+                                setTimeout(() => setToast(""), 3000);
+                              } catch (err: any) {
+                                setToast(err.message || "Failed to reject booking.");
+                                setTimeout(() => setToast(""), 3000);
+                              }
+                            }}
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          {/* Cancelled Bookings */}
+          {cancelled.length > 0 && (
+            <>
+              <div className="dashboard-heading" style={{ marginTop: 46 }}>
+                <div>
+                  <div className="eyebrow">Cancelled</div>
+                  <h2 className="display">
+                    <Undo2 size={20} style={{ verticalAlign: "-3px" }} /> Cancelled
+                    bookings
+                  </h2>
+                </div>
+              </div>
+              <div className="dashboard-grid">
+                {cancelled.map((reservation) => {
+                const property = properties.find(
+                  (item) => item.id === reservation.propertyId,
+                );
+                if (!property) return null;
+                return (
+                  <article className="asset-card" key={reservation.id}>
+                    <div
+                      className="asset-image"
+                      style={{
+                        backgroundImage: `url(${property.image})`,
+                        backgroundPosition: property.imagePosition || "center",
+                      }}
+                    />
+                    <div className="property-body">
+                      <span className="badge badge-status" style={{ backgroundColor: "#fdecea", color: "#9a432d" }}>
+                        Cancelled
+                      </span>
+                      <h3>{property.title}</h3>
+                      <p className="property-location">
+                        <MapPin size={14} /> {property.barangay}, {property.city}
+                      </p>
+                      <div className="property-meta">
+                        <strong className="price">
+                          {formatMoney(property.price)}
+                        </strong>
+                      </div>
+                      <small className="muted">
+                        Reservation cancelled — property is available again
+                      </small>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </>
+          )}
           <div className="dashboard-heading" style={{ marginTop: 46 }}>
             <div>
               <div className="eyebrow">Selling</div>
@@ -328,7 +552,7 @@ export default function DashboardPage() {
                               marketplace.
                             </small>
                           )}
-                      </div>
+                        </div>
                     )}
                   </div>
                 </article>
@@ -462,6 +686,7 @@ export default function DashboardPage() {
           </div>
         </div>
       </main>
+      {toast && <div className="toast">{toast}</div>}
     </div>
   );
 }

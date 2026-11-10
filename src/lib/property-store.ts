@@ -1,4 +1,4 @@
-import { getInitialProperties, Property } from "./marketplace";
+import { getInitialProperties, type Property } from "./marketplace";
 import { SupabaseAdapter } from "./storage-adapter";
 import { supabase } from "./supabase";
 

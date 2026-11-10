@@ -10,7 +10,7 @@ export function PropertyDetailView({
   onSave,
   onBack,
   onContact,
-  onReserve,
+  onRequestBooking,
 }: {
   property: Property;
   saved: boolean;
@@ -18,9 +18,19 @@ export function PropertyDetailView({
   onSave: () => void;
   onBack: () => void;
   onContact: () => void;
-  onReserve: () => void;
+  onRequestBooking?: () => void;
 }) {
-  const isActive = isActiveListing(property);
+  const status = getListingStatus(property);
+  const isBookable = status === "OPEN_FOR_OFFERS";
+
+  const STATUS_COLOR: Record<string, string> = {
+    OPEN_FOR_OFFERS: "#166534",
+    BOOKING_REQUESTED: "#d97706",
+    RESERVED: "#d97706",
+    CLOSED: "#b91c1c",
+    SOLD: "#b91c1c",
+    TERMINATED: "#b91c1c",
+  };
 
   return (
     <main className="detail-view">
@@ -29,18 +39,37 @@ export function PropertyDetailView({
           <ArrowLeft size={16} /> Back to marketplace
         </button>
         <div className="detail-grid">
-          <div
-            className="detail-image"
-            style={{
-              backgroundImage: `url(${property.image})`,
-              backgroundPosition: property.imagePosition || "center",
-            }}
-          />
+          <div>
+            <div
+              className="detail-image"
+              style={{
+                backgroundImage: `url(${property.image})`,
+                backgroundPosition: property.imagePosition || "center",
+              }}
+            />
+            <div className="map-reference">
+              <div className="eyebrow">Location reference</div>
+              <strong>{property.barangay}, {property.city}</strong>
+              <p>
+                Coordinates: {property.latitude.toFixed(4)},{" "}
+                {property.longitude.toFixed(4)}
+              </p>
+              <small>
+                Coordinates and boundaries are approximate and do not replace an
+                official survey.
+              </small>
+            </div>
+          </div>
           <div className="detail-copy">
             <div className="badge-row" style={{ position: "static" }}>
-              <span className="badge badge-status">
-                <Users size={12} />
-                {getListingStatus(property).replaceAll("_", " ")}
+              <span
+                className="badge badge-status"
+                style={{
+                  backgroundColor: STATUS_COLOR[status] || "#166534",
+                  color: "#ffffff",
+                }}
+              >
+                {status.replaceAll("_", " ")}
               </span>
               {property.promoted && (
                 <span className="badge badge-promoted">Promoted</span>
@@ -66,7 +95,7 @@ export function PropertyDetailView({
               </div>
               <div className="spec">
                 <span>Listing status</span>
-                <strong>{getListingStatus(property).replaceAll("_", " ")}</strong>
+                <strong>{status.replaceAll("_", " ")}</strong>
               </div>
             </div>
             <p>{property.description}</p>
@@ -75,22 +104,29 @@ export function PropertyDetailView({
                 <p className="status-message">
                   This is your listing. Manage it from your seller workspace.
                 </p>
-              ) : isActive ? (
+              ) : isBookable ? (
                 <>
-                  <button className="button button-primary" onClick={onReserve}>
-                    Transact via agency
+                  <button
+                    className="button button-primary"
+                    onClick={onRequestBooking}
+                  >
+                    Request Booking
                   </button>
                   <button className="button button-ghost" onClick={onContact}>
-                    <MessageCircle size={16} /> Contact seller
+                    <MessageCircle size={16} /> Contact Seller
                   </button>
                 </>
               ) : (
                 <p className="status-message">
-                  {getListingStatus(property) === "CLOSED"
+                  {status === "CLOSED"
                     ? "This listing is currently closed and is not accepting new inquiries."
-                    : getListingStatus(property) === "SOLD"
+                    : status === "SOLD"
                       ? "This property has been sold and is no longer available."
-                      : "This listing has been terminated and is no longer available."}
+                      : status === "BOOKING_REQUESTED"
+                        ? "A booking request is pending seller review."
+                        : status === "RESERVED"
+                          ? "This property is currently reserved."
+                          : "This listing has been terminated and is no longer available."}
                 </p>
               )}
               <button className="button button-ghost" onClick={onSave}>
@@ -98,39 +134,43 @@ export function PropertyDetailView({
                 {saved ? "Saved" : "Save"}
               </button>
             </div>
-            <div className="verification-box">
+            <div className="verification-box" style={{ borderColor: "#d79c43" }}>
               <h3>
                 <Users
                   size={18}
                   style={{ verticalAlign: "-4px", marginRight: 6 }}
                 />
-                Agency-managed transaction
+                Listing Information
               </h3>
               <ul>
                 <li>
-                  <Check size={14} /> Buyer requests through the agency
+                  Property details are provided by the seller and have not been
+                  independently verified by YuTara.
                 </li>
                 <li>
-                  <Check size={14} /> Agency reviews and holds payment in escrow
+                  Buyers should conduct appropriate legal and government due
+                  diligence before completing a purchase.
                 </li>
                 <li>
-                  <Check size={14} /> Agency prepares transfer documents
-                </li>
-                <li>
-                  <Check size={14} /> Both parties sign through the agency
-                </li>
-                <li>
-                  <Check size={14} /> Agency releases funds and records transfer
+                  YuTara does not establish legal ownership at the listing
+                  stage.
                 </li>
               </ul>
-              <p style={{ fontSize: ".74rem", marginBottom: 0 }}>
-                Buyers should conduct appropriate legal and government due
-                diligence before completing a purchase.
+              <p style={{ fontSize: ".74rem", marginBottom: 0, marginTop: 8 }}>
+                The affiliated agency coordinates the ownership transfer
+                process once a booking is approved by the seller.
               </p>
             </div>
           </div>
         </div>
       </div>
+      <button
+        className="floating-contact"
+        onClick={onContact}
+        aria-label="Contact seller"
+      >
+        <MessageCircle size={20} />
+      </button>
     </main>
   );
 }

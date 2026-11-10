@@ -7,10 +7,18 @@ export const STORAGE_KEYS = [
   "yutara-verifications",
   "yutara-session",
   "yutara-theme",
-  "yutara-saved",
+  "yutara-saved-properties",
   "yutara-inquiries",
   "yutara-profiles",
   "yutara-pending-users",
+  "yutara-booking-requests",
+  "yutara-document-requirements",
+  "yutara-transaction-documents",
+  "yutara-document-reviews",
+  "yutara-processing-stages",
+  "yutara-stage-history",
+  "yutara-notifications",
+  "yutara-agency-personnel",
 ];
 
 export async function resetAllData(): Promise<void> {
@@ -50,6 +58,15 @@ export async function resetAllData(): Promise<void> {
     "yutara-inquiries-change",
     "yutara-profile-change",
     "yutara-pending-users-change",
+    "yutara-saved-properties-change",
+    "yutara-booking-requests-change",
+    "yutara-document-requirements-change",
+    "yutara-transaction-documents-change",
+    "yutara-document-reviews-change",
+    "yutara-processing-stages-change",
+    "yutara-stage-history-change",
+    "yutara-notifications-change",
+    "yutara-agency-personnel-change",
   ];
   events.forEach((eventName) => {
     window.dispatchEvent(new Event(eventName));

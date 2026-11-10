@@ -47,9 +47,9 @@ const BANKS = [
 ];
 
 const PROCESSING_STEPS = [
-  "Establishing secure connection",
-  "Contacting payment provider",
-  "Authorizing transaction",
+  "Preparing demo payment",
+  "Simulating provider response",
+  "Recording reservation payment",
   "Confirming reservation",
 ];
 
@@ -249,8 +249,9 @@ export function PaymentPortal({
           <div className="pay-disclaimer">
             <ShieldCheck size={15} />
             <span>
-              Your reservation payment is held securely until the ownership
-              transfer is complete.
+              MVP demo receipt: no real funds were transferred. In a live
+              service, payment handling and escrow terms would be shown here
+              before you proceed.
             </span>
           </div>
         </div>
@@ -311,15 +312,27 @@ export function PaymentPortal({
       </section>
 
       <section className="pay-panel">
-        <div className="pay-secure">
+        <div className="pay-trust">
           <span className="pay-secure-title">
-            <Lock size={14} /> Secure checkout
+            <Lock size={13} /> Secure checkout
           </span>
           <span className="pay-secure-meta">
-            <ShieldCheck size={14} /> 256-bit TLS · PCI-DSS aligned
+            <ShieldCheck size={13} /> 256-bit TLS · PCI-DSS aligned
           </span>
+          <small className="pay-demo-note">
+            <span className="pay-demo-badge">MVP DEMO</span> Payment is
+            simulated for demonstration purposes. No real funds are
+            transferred.
+          </small>
+          <small className="muted pay-demo">
+            Payment retry: If payment fails, your reservation remains active for
+            48 hours. You can retry payment anytime before it expires.
+          </small>
+          <small className="muted pay-demo">
+            Cancellation terms: the reservation fee and refund eligibility must
+            be confirmed with the agency before a live purchase.
+          </small>
         </div>
-
         {stage === "processing" ? (
           <div className="pay-processing">
             <Loader2 className="pay-spinner" size={30} />
@@ -531,5 +544,5 @@ export function PaymentPortal({
         )}
       </section>
     </div>
-  );
+    );
 }

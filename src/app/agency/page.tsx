@@ -1,580 +1,1019 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   BadgeCheck,
+  BookOpen,
   Clock,
   FileText,
   Handshake,
   ShieldCheck,
   Truck,
   Wallet,
+  Users,
+  Search,
+  RefreshCw,
 } from "lucide-react";
 import { formatMoney } from "@/lib/marketplace";
 import {
-  agencyReview,
-  cancelTransaction,
-  holdPayment,
-  prepareDocuments,
   readTransactions,
-  recordSigning,
-  releaseFunds,
-  TRANSACTIONS_EVENT,
   Transaction,
+  TRANSACTIONS_EVENT,
 } from "@/lib/transactions";
-import { PromptModal } from "@/components/PromptModal";
-import { Modal } from "@/components/Modal";
-import { getStoredSession } from "@/lib/demo-auth";
+import { readProperties } from "@/lib/property-store";
+import { readBookingRequests, BookingRequest } from "@/lib/booking-service";
+import { readDocumentRequirements } from "@/lib/document-service";
+import { readAgencyPersonnel, canManageTransactions } from "@/lib/agency-service";
+import { readNotifications, unreadCount } from "@/lib/notification-service";
+import { DemoUser, getStoredSession } from "@/lib/demo-auth";
+import { AgencyLayout } from "./layout";
 
 const STAGE_LABELS: Record<string, string> = {
-  BOOKING_REQUESTED: "Booking requested",
-  AGENCY_REVIEW: "Agency review",
-  PAYMENT_HELD: "Payment held in escrow",
-  DOCUMENTS_PREPARED: "Documents prepared",
-  PARTIES_SIGNED: "Parties signed",
-  FUNDS_RELEASED: "Funds released",
-  COMPLETED: "Transaction complete",
+  AGREEMENT_CONFIRMED: "Agreement Confirmed",
+  AGENCY_INTAKE: "Agency Intake",
+  DOCUMENT_COLLECTION: "Document Collection",
+  DOCUMENT_REVIEW: "Document Review",
+  DOCUMENT_COMPLETION: "Document Completion",
+  DEED_PREPARATION: "Deed Preparation",
+  DEED_EXECUTION: "Deed Execution",
+  BIR_PROCESSING: "BIR Processing",
+  LOCAL_GOVERNMENT_PROCESSING: "Local Government Processing",
+  REGISTRY_OF_DEEDS_PROCESSING: "Registry of Deeds Processing",
+  NEW_TITLE_ISSUANCE: "New Title Issuance",
+  TAX_DECLARATION_UPDATE: "Tax Declaration Update",
+  COMPLETED: "Completed",
+  ON_HOLD: "On Hold",
   CANCELLED: "Cancelled",
+  TERMINATED: "Terminated",
+};
+
+const STAGE_COLOR: Record<string, string> = {
+  AGREEMENT_CONFIRMED: "#166534",
+  AGENCY_INTAKE: "#166534",
+  DOCUMENT_COLLECTION: "#d97706",
+  DOCUMENT_REVIEW: "#d97706",
+  DOCUMENT_COMPLETION: "#d97706",
+  DEED_PREPARATION: "#15803d",
+  DEED_EXECUTION: "#15803d",
+  BIR_PROCESSING: "#15803d",
+  LOCAL_GOVERNMENT_PROCESSING: "#15803d",
+  REGISTRY_OF_DEEDS_PROCESSING: "#15803d",
+  NEW_TITLE_ISSUANCE: "#166534",
+  TAX_DECLARATION_UPDATE: "#16653d",
+  COMPLETED: "#166534",
+  ON_HOLD: "#d97706",
+  CANCELLED: "#b91c1c",
+  TERMINATED: "#b91c1c",
 };
 
 export default function AgencyPage() {
+  const [session, setSession] = useState<DemoUser | null>(null);
+  const [activeSection, setActiveSection] = useState("overview");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [reviewId, setReviewId] = useState<string | null>(null);
-  const [reviewDecision, setReviewDecision] = useState<"APPROVED" | "REJECTED">("APPROVED");
-  const [reviewNote, setReviewNote] = useState("");
-  const [paymentId, setPaymentId] = useState<string | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState("");
-  const [docsId, setDocsId] = useState<string | null>(null);
-  const [docs, setDocs] = useState<string[]>([]);
-  const [signId, setSignId] = useState<string | null>(null);
-  const [signParty, setSignParty] = useState<"BUYER" | "SELLER">("BUYER");
-  const [releaseId, setReleaseId] = useState<string | null>(null);
-  const [cancelId, setCancelId] = useState<string | null>(null);
-
-  const router = useRouter();
+  const [bookingRequests, setBookingRequests] = useState<BookingRequest[]>([]);
+  const [properties, setProperties] = useState<any[]>([]);
+  const [documentRequirements, setDocumentRequirements] = useState<any[]>([]);
+  const [agencyPersonnel, setAgencyPersonnel] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    window.setTimeout(() => {
+    const load = async () => {
       const current = getStoredSession();
       if (!current) {
-        router.replace("/login?next=/agency");
+        window.location.href = "/login?next=/agency";
         return;
       }
-    }, 0);
-  }, [router]);
-
-  useEffect(() => {
-    const sync = async () => {
-      const data = await readTransactions();
-      setTransactions(data);
+      setSession(current);
+      const [txs, bookings, props, docs, personnel, notifs] =
+        await Promise.all([
+          readTransactions(),
+          readBookingRequests(),
+          readProperties(),
+          readDocumentRequirements(),
+          readAgencyPersonnel(),
+          readNotifications(current.email),
+        ]);
+      setTransactions(txs);
+      setBookingRequests(bookings);
+      setProperties(props);
+      setDocumentRequirements(docs);
+      setAgencyPersonnel(personnel);
+      setNotifications(notifs);
+      setLoading(false);
     };
-    sync();
-    window.addEventListener(TRANSACTIONS_EVENT, sync);
-    window.addEventListener("storage", sync);
+    load();
+
+    const timer = window.setTimeout(() => {
+      window.addEventListener(TRANSACTIONS_EVENT, load);
+      window.addEventListener("storage", load);
+    }, 0);
     return () => {
-      window.removeEventListener(TRANSACTIONS_EVENT, sync);
-      window.removeEventListener("storage", sync);
+      window.removeEventListener(TRANSACTIONS_EVENT, load);
+      window.removeEventListener("storage", load);
+      clearTimeout(timer);
     };
   }, []);
 
-  const agency = transactions.filter(
-    (tx) => tx.stage !== "COMPLETED" && tx.stage !== "CANCELLED",
-  );
-  const completed = transactions.filter((tx) => tx.stage === "COMPLETED");
+  const isAgency = session && session.role.startsWith("AGENCY");
+  const canManage = session && canManageTransactions(session.role);
 
-  const totalEscrow = agency.reduce(
-    (sum, tx) => sum + tx.escrowHeld,
-    0,
+  const pendingIntake = transactions.filter(
+    (tx) =>
+      (tx.stage as string) === "AGREEMENT_CONFIRMED" ||
+      (tx.stage as string) === "BOOKING_REQUESTED",
   );
-  const totalFees = agency.reduce((sum, tx) => sum + tx.agencyFee, 0);
+  const activeTransactions = transactions.filter(
+    (tx) =>
+      (tx.stage as string) !== "COMPLETED" &&
+      (tx.stage as string) !== "CANCELLED" &&
+      (tx.stage as string) !== "TERMINATED",
+  );
+  const completedTransactions = transactions.filter(
+    (tx) => (tx.stage as string) === "COMPLETED",
+  );
+  const pendingDocs = documentRequirements.filter(
+    (doc) =>
+      doc.status === "SUBMITTED" ||
+      doc.status === "UNDER_REVIEW" ||
+      doc.status === "RESUBMISSION_REQUIRED",
+  );
+
+  if (!isAgency) {
+    return (
+      <div className="app-shell">
+        <main className="workspace">
+          <div className="container">
+            <h1>Access Denied</h1>
+            <p>Agency portal access is restricted to agency personnel.</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="app-shell">
+        <AgencyLayout session={session}>
+          <div className="container">
+            <h1 className="display">Loading Agency Portal…</h1>
+          </div>
+        </AgencyLayout>
+      </div>
+    );
+  }
 
   return (
     <div className="app-shell">
-      <main className="workspace">
-        <div className="container">
-          <div className="eyebrow">Partner agency</div>
-          <h1 className="display">Transaction desk</h1>
-
-          <div className="stats">
-            <div className="stat">
-              <span>Active transactions</span>
-              <strong>{agency.length}</strong>
-            </div>
-            <div className="stat">
-              <span>Completed</span>
-              <strong>{completed.length}</strong>
-            </div>
-            <div className="stat">
-              <span>Held in escrow</span>
-              <strong>{formatMoney(totalEscrow)}</strong>
-            </div>
-            <div className="stat">
-              <span>Agency fees</span>
-              <strong>{formatMoney(totalFees)}</strong>
-            </div>
-          </div>
-
-          <div className="dashboard-heading" style={{ marginTop: 40 }}>
-            <div>
-              <div className="eyebrow">Active transactions</div>
-              <h2 className="display">
-                <Clock size={20} style={{ verticalAlign: "-3px" }} />
-                In progress
-              </h2>
-            </div>
-          </div>
-
-          {agency.length === 0 ? (
-            <div className="table-wrap empty-dashboard">
-              <ShieldCheck size={24} />
-              <h3>No active transactions</h3>
-              <p className="muted">
-                When a buyer requests a booking, it appears here for agency
-                review and coordination.
-              </p>
-            </div>
-          ) : (
-            <div className="dashboard-grid">
-              {agency.map((tx) => (
-                <article className="asset-card" key={tx.id}>
-                  <div
-                    className="asset-image"
-                    style={{
-                      backgroundImage: `url(${tx.image})`,
-                      backgroundPosition: "center",
-                    }}
-                  />
-                  <div className="property-body">
-                    <span
-                      className={`badge badge-status`}
-                    >
-                      {STAGE_LABELS[tx.stage]}
-                    </span>
-                    <h3>{tx.propertyTitle}</h3>
-                    <p className="property-location">
-                      {tx.buyerName} → {tx.sellerName}
-                    </p>
-                    <div className="property-meta">
-                      <strong className="price">
-                        {formatMoney(tx.salePrice)}
-                      </strong>
-                      <span className="area">
-                        Agency fee · {formatMoney(tx.agencyFee)}
-                      </span>
-                    </div>
-                    <div style={{ marginTop: 14, display: "grid", gap: 8 }}>
-                      {tx.stage === "BOOKING_REQUESTED" && (
-                        <button
-                          className="button button-primary"
-                          onClick={() => {
-                            setReviewId(tx.id);
-                            setReviewDecision("APPROVED");
-                            setReviewNote("");
-                          }}
-                        >
-                          <Handshake size={14} /> Accept booking
-                        </button>
-                      )}
-                      {tx.stage === "AGENCY_REVIEW" && (
-                        <button
-                          className="button button-primary"
-                          onClick={() => {
-                            setPaymentId(tx.id);
-                            setPaymentMethod("");
-                          }}
-                        >
-                          <Wallet size={14} /> Record payment held
-                        </button>
-                      )}
-                      {tx.stage === "PAYMENT_HELD" && (
-                        <button
-                          className="button button-primary"
-                          onClick={() => {
-                            setDocsId(tx.id);
-                            setDocs([]);
-                          }}
-                        >
-                          <FileText size={14} /> Prepare documents
-                        </button>
-                      )}
-                      {tx.stage === "DOCUMENTS_PREPARED" && (
-                        <button
-                          className="button button-primary"
-                          onClick={() => {
-                            setSignId(tx.id);
-                            setSignParty("BUYER");
-                          }}
-                        >
-                          <Handshake size={14} /> Record signature
-                        </button>
-                      )}
-                      {tx.stage === "PARTIES_SIGNED" && (
-                        <button
-                          className="button button-primary"
-                          onClick={() => setReleaseId(tx.id)}
-                        >
-                          <Truck size={14} /> Release funds
-                        </button>
-                      )}
-                      {tx.stage === "FUNDS_RELEASED" && (
-                        <button
-                          className="button button-primary"
-                          onClick={async () => {
-                            await releaseFunds(tx.id, "AGENCY");
-                          }}
-                        >
-                          <BadgeCheck size={14} /> Complete
-                        </button>
-                      )}
-                      <button
-                        className="button button-danger"
-                        onClick={() => {
-                          setCancelId(tx.id);
-                        }}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
+      <AgencyLayout session={session}>
+        <div className="agency-content">
+          {activeSection === "overview" && (
+            <AgencyOverview
+              transactions={transactions}
+              pendingIntake={pendingIntake}
+              activeTransactions={activeTransactions}
+              completedTransactions={completedTransactions}
+              pendingDocs={pendingDocs}
+              bookingRequests={bookingRequests}
+              notifications={notifications}
+              agencyPersonnel={agencyPersonnel}
+              formatMoney={formatMoney}
+            />
           )}
-          <div>
-            {completed.length > 0 && (
-              <>
-                <div className="dashboard-heading" style={{ marginTop: 46 }}>
-                  <div>
-                    <div className="eyebrow">Completed</div>
-                    <h2 className="display">
-                      <BadgeCheck size={20} style={{ verticalAlign: "-3px" }} />
-                      Finished transactions
-                    </h2>
-                  </div>
-                </div>
-                <div className="dashboard-grid">
-              {completed.map((tx) => (
-                <article className="asset-card" key={tx.id}>
-                  <div
-                    className="asset-image"
-                    style={{
-                      backgroundImage: `url(${tx.image})`,
-                      backgroundPosition: "center",
-                    }}
-                  />
-                  <div className="property-body">
-                    <span className="badge badge-verified">
-                      <BadgeCheck size={12} /> Complete
-                    </span>
-                    <h3>{tx.propertyTitle}</h3>
-                    <p className="property-location">
-                      {tx.buyerName} → {tx.sellerName}
-                    </p>
-                    <div className="property-meta">
-                      <strong className="price">
-                        {formatMoney(tx.salePrice)}
-                      </strong>
-                    </div>
-                    <small className="muted">
-                      {formatTimestamp(tx.updatedAt)}
-                    </small>
-                  </div>
-                </article>
-              ))}
-            </div>
-            </>
+          {activeSection === "transactions" && (
+            <AllTransactions
+              transactions={transactions}
+              properties={properties}
+              formatMoney={formatMoney}
+            />
           )}
-          </div>
-
-          {reviewId && (
-            <Modal
-              title="Agency review"
-              onClose={() => setReviewId(null)}
-            >
-              <p className="muted">
-                Accept or reject this booking request. Accepted bookings move to
-                payment hold in agency escrow.
-              </p>
-              <label className="form-label">
-                Decision
-                <select
-                  className="form-input"
-                  value={reviewDecision}
-                  onChange={(event) =>
-                    setReviewDecision(event.target.value as "APPROVED" | "REJECTED")
-                  }
-                >
-                  <option value="APPROVED">Accept booking</option>
-                  <option value="REJECTED">Reject booking</option>
-                </select>
-              </label>
-              {reviewDecision === "REJECTED" && (
-                <label style={{ gridColumn: "1 / -1" }}>
-                  Reason
-                  <textarea
-                    className="form-input form-textarea"
-                    value={reviewNote}
-                    onChange={(event) => setReviewNote(event.target.value)}
-                    placeholder="Reason for rejection"
-                  />
-                </label>
-              )}
-              <div className="modal-foot">
-                <button
-                  className="button button-ghost"
-                  onClick={() => setReviewId(null)}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="button button-primary"
-                  disabled={
-                    reviewDecision === "REJECTED" && !reviewNote.trim()
-                  }
-                  onClick={async () => {
-                    await agencyReview(
-                      reviewId,
-                      "AGENCY",
-                      reviewDecision,
-                      reviewNote.trim() || undefined,
-                    );
-                    setReviewId(null);
-                  }}
-                >
-                  {reviewDecision === "APPROVED"
-                    ? "Accept booking"
-                    : "Reject booking"}
-                </button>
-              </div>
-            </Modal>
+          {activeSection === "intake" && (
+            <TransactionIntake
+              properties={properties}
+              bookingRequests={bookingRequests}
+              formatMoney={formatMoney}
+            />
           )}
-
-          {paymentId && (
-            <Modal title="Record payment" onClose={() => setPaymentId(null)}>
-              <p className="muted">
-                Record the buyer&apos;s reservation fee held in agency escrow.
-              </p>
-              <label className="form-label">
-                Payment method
-                <select
-                  className="form-input"
-                  value={paymentMethod}
-                  onChange={(event) => setPaymentMethod(event.target.value)}
-                >
-                  <option value="">Select method</option>
-                  <option value="GCash">GCash</option>
-                  <option value="Maya">Maya</option>
-                  <option value="Bank transfer">Bank transfer</option>
-                  <option value="Card">Card</option>
-                </select>
-              </label>
-              <div className="modal-foot">
-                <button
-                  className="button button-ghost"
-                  onClick={() => setPaymentId(null)}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="button button-primary"
-                  disabled={!paymentMethod.trim()}
-                  onClick={async () => {
-                    await holdPayment(paymentId, "AGENCY", paymentMethod);
-                    setPaymentId(null);
-                  }}
-                >
-                  Record payment
-                </button>
-              </div>
-            </Modal>
+          {activeSection === "documents" && (
+            <DocumentManagement
+              documentRequirements={documentRequirements}
+              properties={properties}
+              formatMoney={formatMoney}
+            />
           )}
-
-          {docsId && (
-            <Modal
-              title="Prepare transfer documents"
-              onClose={() => {
-                setDocsId(null);
-                setDocs([]);
-              }}
-            >
-              <p className="muted">
-                List the transfer documents the agency prepares for this
-                transaction.
-              </p>
-              <div className="form-grid">
-                {docs.map((doc, index) => (
-                  <label key={index} style={{ gridColumn: "1 / -1" }}>
-                    Document {index + 1}
-                    <input
-                      className="form-input"
-                      value={doc}
-                      onChange={(event) => {
-                        const next = [...docs];
-                        next[index] = event.target.value;
-                        setDocs(next);
-                      }}
-                      placeholder="e.g. Deed of sale"
-                    />
-                  </label>
-                ))}
-                <label style={{ gridColumn: "1 / -1" }}>
-                  <button
-                    className="button button-ghost"
-                    type="button"
-                    onClick={() => setDocs([...docs, ""])}
-                  >
-                    <ArrowRight size={14} /> Add document
-                  </button>
-                </label>
-              </div>
-              <div className="modal-foot">
-                <button
-                  className="button button-ghost"
-                  onClick={() => {
-                    setDocsId(null);
-                    setDocs([]);
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="button button-primary"
-                  disabled={docs.some((d) => !d.trim())}
-                  onClick={async () => {
-                    await prepareDocuments(
-                      docsId,
-                      "AGENCY",
-                      docs.filter((d) => d.trim()),
-                    );
-                    setDocsId(null);
-                    setDocs([]);
-                  }}
-                >
-                  Prepare documents
-                </button>
-              </div>
-            </Modal>
+          {activeSection === "review" && (
+            <DocumentReview
+              documentRequirements={documentRequirements}
+              formatMoney={formatMoney}
+            />
           )}
-
-          {signId && (
-            <Modal title="Record signature" onClose={() => setSignId(null)}>
-              <p className="muted">
-                Record which party has signed the transfer documents.
-              </p>
-              <label className="form-label">
-                Signing party
-                <select
-                  className="form-input"
-                  value={signParty}
-                  onChange={(event) =>
-                    setSignParty(event.target.value as "BUYER" | "SELLER")
-                  }
-                >
-                  <option value="BUYER">Buyer</option>
-                  <option value="SELLER">Seller</option>
-                </select>
-              </label>
-              <div className="modal-foot">
-                <button
-                  className="button button-ghost"
-                  onClick={() => setSignId(null)}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="button button-primary"
-                  onClick={async () => {
-                    await recordSigning(signId, "AGENCY", signParty);
-                    setSignId(null);
-                  }}
-                >
-                  Record signature
-                </button>
-              </div>
-            </Modal>
+          {activeSection === "queue" && (
+            <ProcessingQueue
+              transactions={transactions}
+              formatMoney={formatMoney}
+            />
           )}
-
-          {releaseId && (
-            <Modal title="Release funds" onClose={() => setReleaseId(null)}>
-              <p className="muted">
-                Release the escrow funds to the seller and complete the
-                transaction.
-              </p>
-              <div className="review-panel">
-                <div className="review-row">
-                  <span>Property</span>
-                  <strong>
-                    {transactions.find((tx) => tx.id === releaseId)?.propertyTitle}
-                  </strong>
-                </div>
-                <div className="review-row">
-                  <span>Sale price</span>
-                  <strong>
-                    {formatMoney(
-                      transactions.find((tx) => tx.id === releaseId)?.salePrice ||
-                        0,
-                    )}
-                  </strong>
-                </div>
-                <div className="review-row">
-                  <span>Agency fee</span>
-                  <strong>
-                    {formatMoney(
-                      transactions.find((tx) => tx.id === releaseId)?.agencyFee ||
-                        0,
-                    )}
-                  </strong>
-                </div>
-              </div>
-              <div className="modal-foot">
-                <button
-                  className="button button-ghost"
-                  onClick={() => setReleaseId(null)}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="button button-primary"
-                  onClick={async () => {
-                    await releaseFunds(releaseId, "AGENCY");
-                    setReleaseId(null);
-                  }}
-                >
-                  Release funds
-                </button>
-              </div>
-            </Modal>
+          {activeSection === "clients" && (
+            <ClientManagement
+              transactions={transactions}
+              formatMoney={formatMoney}
+            />
           )}
-
-          {cancelId && (
-            <PromptModal
-              title="Cancel transaction"
-              label="Reason for cancellation"
-              placeholder="e.g. Buyer withdrew the offer."
-              confirmLabel="Cancel transaction"
-              onConfirm={async (reason) => {
-                await cancelTransaction(cancelId, "AGENCY", reason);
-                setCancelId(null);
-              }}
-              onClose={() => setCancelId(null)}
+          {activeSection === "completed" && (
+            <CompletedTransfers
+              transactions={completedTransactions}
+              formatMoney={formatMoney}
+            />
+          )}
+          {activeSection === "reports" && (
+            <AgencyReports
+              transactions={transactions}
+              formatMoney={formatMoney}
+            />
+          )}
+          {activeSection === "settings" && (
+            <AgencySettings
+              personnel={agencyPersonnel}
+              formatMoney={formatMoney}
             />
           )}
         </div>
-      </main>
+      </AgencyLayout>
     </div>
   );
 }
 
-function formatTimestamp(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleString("en-PH", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+/* ---------- Overview ---------- */
+
+function AgencyOverview({
+  transactions,
+  pendingIntake,
+  activeTransactions,
+  completedTransactions,
+  pendingDocs,
+  bookingRequests,
+  notifications,
+  agencyPersonnel,
+  formatMoney,
+}: any) {
+  const totalEscrow = activeTransactions.reduce(
+    (sum: number, tx: any) => sum + (tx.escrowHeld || 0),
+    0,
+  );
+  const totalFees = activeTransactions.reduce(
+    (sum: number, tx: any) => sum + (tx.agencyFee || 0),
+    0,
+  );
+  const unread = notifications.filter((n: any) => !n.isRead).length;
+
+  return (
+    <div className="container">
+      <div className="agency-page-header">
+        <h1 className="display">Agency Overview</h1>
+        <p className="muted">
+          Manage land transfer transactions for the affiliated agency.
+        </p>
+      </div>
+
+      <div className="agency-stats">
+        <div className="stat-card">
+          <span>Active Transactions</span>
+          <strong>{activeTransactions.length}</strong>
+        </div>
+        <div className="stat-card">
+          <span>Awaiting Intake</span>
+          <strong>{pendingIntake.length}</strong>
+        </div>
+        <div className="stat-card">
+          <span>Pending Documents</span>
+          <strong>{pendingDocs.length}</strong>
+        </div>
+        <div className="stat-card">
+          <span>Completed</span>
+          <strong>{completedTransactions.length}</strong>
+        </div>
+        <div className="stat-card">
+          <span>Held in Escrow</span>
+          <strong>{formatMoney(totalEscrow)}</strong>
+        </div>
+        <div className="stat-card">
+          <span>Agency Fees</span>
+          <strong>{formatMoney(totalFees)}</strong>
+        </div>
+      </div>
+
+      <div className="agency-grid two-col">
+        <div className="agency-card">
+          <h3>New Transaction Intake</h3>
+          <p className="muted">
+            {pendingIntake.length} transaction(s) awaiting agency intake.
+          </p>
+          <button className="button button-primary" onClick={() => {}}>
+            View Intake Queue
+          </button>
+        </div>
+        <div className="agency-card">
+          <h3>Document Review</h3>
+          <p className="muted">
+            {pendingDocs.length} document(s) requiring attention.
+          </p>
+          <button className="button button-primary" onClick={() => {}}>
+            Review Documents
+          </button>
+        </div>
+      </div>
+
+      {unread > 0 && (
+        <div className="agency-card" style={{ marginTop: 16 }}>
+          <h3>Recent Notifications</h3>
+          <div className="notification-list">
+            {notifications
+              .slice(0, 5)
+              .map((n: any) => (
+                <div
+                  key={n.id}
+                  className={`notification-item ${n.isRead ? "" : "unread"}`}
+                >
+                  <div>
+                    <strong>{n.title}</strong>
+                    <p className="muted" style={{ margin: "4px 0 0", fontSize: ".85rem" }}>
+                      {n.description}
+                    </p>
+                  </div>
+                  <span className="muted" style={{ fontSize: ".75rem" }}>
+                    {new Date(n.createdAt).toLocaleString()}
+                  </span>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- All Transactions ---------- */
+
+function AllTransactions({ transactions, properties, formatMoney }: any) {
+  return (
+    <div className="container">
+      <div className="agency-page-header">
+        <h1 className="display">All Transactions</h1>
+        <p className="muted">View and manage all land transfer transactions.</p>
+      </div>
+
+      <div className="table-wrap">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Reference</th>
+              <th>Property</th>
+              <th>Buyer</th>
+              <th>Seller</th>
+              <th>Stage</th>
+              <th>Sale Price</th>
+              <th>Agency Fee</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {transactions.map((tx: any) => (
+              <tr key={tx.id}>
+                <td>
+                  <code className="tx-ref">{tx.id}</code>
+                </td>
+                <td>
+                  <strong>{tx.propertyTitle}</strong>
+                  <br />
+                  <span className="muted">{tx.barangay}, {tx.city}</span>
+                </td>
+                <td>
+                  <strong>{tx.buyerName}</strong>
+                </td>
+                <td>
+                  <strong>{tx.sellerName}</strong>
+                </td>
+                <td>
+                  <span
+                    className="badge badge-status"
+                    style={{
+                      backgroundColor:
+                        STAGE_COLOR[tx.stage] || "#166534",
+                      color: "#ffffff",
+                    }}
+                  >
+                    {STAGE_LABELS[tx.stage] || tx.stage}
+                  </span>
+                </td>
+                <td>{formatMoney(tx.salePrice || 0)}</td>
+                <td>{formatMoney(tx.agencyFee || 0)}</td>
+                <td>
+                  <button className="button button-ghost" onClick={() => {}}>
+                    Manage
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {transactions.length === 0 && (
+              <tr>
+                <td colSpan={8}>
+                  <div className="empty-dashboard">
+                    <FileText size={24} />
+                    <p className="muted">No transactions found.</p>
+                  </div>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Transaction Intake ---------- */
+
+function TransactionIntake({ properties, bookingRequests, formatMoney }: any) {
+  return (
+    <div className="container">
+      <div className="agency-page-header">
+        <h1 className="display">New Transaction Intake</h1>
+        <p className="muted">
+          Create new agency-managed transactions from approved booking requests.
+        </p>
+      </div>
+
+      <div className="agency-card">
+        <h3>Approved Booking Requests</h3>
+        <p className="muted">
+          Booking requests approved by sellers that are ready for agency intake.
+        </p>
+        {bookingRequests.length > 0 ? (
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Buyer</th>
+                  <th>Proposed Price</th>
+                  <th>Requested</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bookingRequests.map((b: any) => (
+                  <tr key={b.id}>
+                    <td>
+                      <strong>{b.propertyTitle}</strong>
+                    </td>
+                    <td>{b.buyerName}</td>
+                    <td>
+                      {b.proposedPrice ? formatMoney(b.proposedPrice) : "—"}
+                    </td>
+                    <td>{new Date(b.createdAt).toLocaleDateString()}</td>
+                    <td>
+                      <button
+                        className="button button-primary"
+                        onClick={() => {}}
+                      >
+                        Create Transaction
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="empty-dashboard">
+            <ShieldCheck size={24} />
+            <p className="muted">No approved booking requests awaiting intake.</p>
+          </div>
+        )}
+      </div>
+
+      <div className="agency-card" style={{ marginTop: 16 }}>
+        <h3>Manual Transaction Creation</h3>
+        <p className="muted">
+          Create a new transaction directly for a property already agreed upon
+          by buyer and seller.
+        </p>
+        <form className="form-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
+          <label>
+            Property
+            <select className="form-input">
+              {properties.map((p: any) => (
+                <option key={p.id} value={p.id}>
+                  {p.title} — {p.barangay}, {p.city}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Buyer Email
+            <input
+              className="form-input"
+              type="email"
+              placeholder="buyer@example.com"
+            />
+          </label>
+          <label>
+            Seller Email
+            <input
+              className="form-input"
+              type="email"
+              placeholder="seller@example.com"
+            />
+          </label>
+          <label>
+            Agreed Sale Price (PHP)
+            <input className="form-input" inputMode="numeric" placeholder="0" />
+          </label>
+          <label style={{ gridColumn: "1 / -1" }}>
+            Notes
+            <textarea className="form-input form-textarea" placeholder="Agency notes for this transaction" />
+          </label>
+          <div style={{ gridColumn: "1 / -1", marginTop: 12 }}>
+            <button className="button button-primary" type="button">
+              Create Transaction
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Document Management ---------- */
+
+function DocumentManagement({ documentRequirements, properties, formatMoney }: any) {
+  return (
+    <div className="container">
+      <div className="agency-page-header">
+        <h1 className="display">Document Management</h1>
+        <p className="muted">
+          Manage document requirements and submissions for all transactions.
+        </p>
+      </div>
+
+      <div className="table-wrap">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Requirement</th>
+              <th>Transaction</th>
+              <th>Responsible Party</th>
+              <th>Status</th>
+              <th>Deadline</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {documentRequirements.map((doc: any) => (
+              <tr key={doc.id}>
+                <td>
+                  <strong>{doc.requirementName}</strong>
+                  <br />
+                  <span className="muted" style={{ fontSize: ".8rem" }}>
+                    {doc.description}
+                  </span>
+                </td>
+                <td>{doc.transactionId}</td>
+                <td>{doc.responsibleParty}</td>
+                <td>
+                  <span
+                    className="badge badge-status"
+                    style={{
+                      backgroundColor:
+                        doc.status === "ACCEPTED"
+                          ? "#166534"
+                          : doc.status === "REJECTED"
+                            ? "#b91c1c"
+                            : doc.status === "SUBMITTED" ||
+                              doc.status === "UNDER_REVIEW"
+                              ? "#d97706"
+                              : "#6b7280",
+                      color: "#ffffff",
+                    }}
+                  >
+                    {doc.status.replaceAll("_", " ")}
+                  </span>
+                </td>
+                <td>
+                  {doc.submissionDeadline || "—"}
+                </td>
+                <td>
+                  <button className="button button-ghost" onClick={() => {}}>
+                    View
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {documentRequirements.length === 0 && (
+              <tr>
+                <td colSpan={6}>
+                  <div className="empty-dashboard">
+                    <FileText size={24} />
+                    <p className="muted">No document requirements found.</p>
+                  </div>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Document Review ---------- */
+
+function DocumentReview({ documentRequirements, formatMoney }: any) {
+  const pendingReview = documentRequirements.filter(
+    (doc: any) =>
+      doc.status === "SUBMITTED" || doc.status === "UNDER_REVIEW",
+  );
+
+  return (
+    <div className="container">
+      <div className="agency-page-header">
+        <h1 className="display">Document Review</h1>
+        <p className="muted">
+          Review submitted documents and make accept/reject decisions.
+        </p>
+      </div>
+
+      {pendingReview.length > 0 ? (
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Document</th>
+                <th>Requirement</th>
+                <th>Submitted By</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pendingReview.map((doc: any) => (
+                <tr key={doc.id}>
+                  <td>
+                    <strong>{doc.requirementName}</strong>
+                    <br />
+                    <span className="muted" style={{ fontSize: ".8rem" }}>
+                      {doc.transactionId}
+                    </span>
+                  </td>
+                  <td>{doc.responsibleParty}</td>
+                  <td>
+                    <span className="badge badge-status">
+                      {doc.status.replaceAll("_", " ")}
+                    </span>
+                  </td>
+                  <td>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button
+                        className="button button-primary"
+                        onClick={() => {}}
+                      >
+                        Accept
+                      </button>
+                      <button
+                        className="button button-danger"
+                        onClick={() => {}}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="empty-dashboard">
+          <BadgeCheck size={24} />
+          <p className="muted">No documents pending review.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- Processing Queue ---------- */
+
+function ProcessingQueue({ transactions, formatMoney }: any) {
+  const queue = transactions.filter(
+    (tx: any) =>
+      tx.stage !== "COMPLETED" &&
+      tx.stage !== "CANCELLED" &&
+      tx.stage !== "TERMINATED",
+  );
+
+  return (
+    <div className="container">
+      <div className="agency-page-header">
+        <h1 className="display">Processing Queue</h1>
+        <p className="muted">
+          Track transactions currently being processed by the agency.
+        </p>
+      </div>
+
+      <div className="table-wrap">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Reference</th>
+              <th>Property</th>
+              <th>Current Stage</th>
+              <th>Next Action</th>
+              <th>Deadline</th>
+              <th>Assigned</th>
+            </tr>
+          </thead>
+          <tbody>
+            {queue.map((tx: any) => (
+              <tr key={tx.id}>
+                <td>
+                  <code className="tx-ref">{tx.id}</code>
+                </td>
+                <td>{tx.propertyTitle}</td>
+                <td>
+                  <span
+                    className="badge badge-status"
+                    style={{
+                      backgroundColor: STAGE_COLOR[tx.stage] || "#166534",
+                      color: "#ffffff",
+                    }}
+                  >
+                    {STAGE_LABELS[tx.stage] || tx.stage}
+                  </span>
+                </td>
+                <td>Continue processing</td>
+                <td>—</td>
+                <td>Agency Officer</td>
+              </tr>
+            ))}
+            {queue.length === 0 && (
+              <tr>
+                <td colSpan={6}>
+                  <div className="empty-dashboard">
+                    <Clock size={24} />
+                    <p className="muted">No transactions in the processing queue.</p>
+                  </div>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Client Management ---------- */
+
+function ClientManagement({ transactions, formatMoney }: any) {
+  const txs = transactions as any[];
+  const buyerClients = txs.map((tx: any) => ({
+    name: tx.buyerName,
+    email: tx.buyerId,
+    role: "BUYER",
+  }));
+  const sellerClients = txs.map((tx: any) => ({
+    name: tx.sellerName,
+    email: tx.sellerId,
+    role: "SELLER",
+  }));
+  const clients = [...new Set([...buyerClients, ...sellerClients])];
+
+  return (
+    <div className="container">
+      <div className="agency-page-header">
+        <h1 className="display">Client Management</h1>
+        <p className="muted">
+          Manage buyers and sellers involved in agency transactions.
+        </p>
+      </div>
+
+      <div className="table-wrap">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Client</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Transactions</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {clients.map((c: any, i: number) => (
+              <tr key={i}>
+                <td><strong>{c.name}</strong></td>
+                <td>{c.email}</td>
+                <td>{c.role}</td>
+                <td>{transactions.filter(
+                  (tx: any) =>
+                    tx.buyerId === c.email || tx.sellerId === c.email,
+                ).length}</td>
+                <td>
+                  <button className="button button-ghost" onClick={() => {}}>
+                    View
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {clients.length === 0 && (
+              <tr>
+                <td colSpan={5}>
+                  <div className="empty-dashboard">
+                    <Users size={24} />
+                    <p className="muted">No clients found.</p>
+                  </div>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Completed Transfers ---------- */
+
+function CompletedTransfers({ transactions, formatMoney }: any) {
+  return (
+    <div className="container">
+      <div className="agency-page-header">
+        <h1 className="display">Completed Transfers</h1>
+        <p className="muted">
+          View all completed land transfer transactions.
+        </p>
+      </div>
+
+      <div className="table-wrap">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Reference</th>
+              <th>Property</th>
+              <th>Buyer</th>
+              <th>Seller</th>
+              <th>Sale Price</th>
+              <th>Completed</th>
+            </tr>
+          </thead>
+          <tbody>
+            {transactions.map((tx: any) => (
+              <tr key={tx.id}>
+                <td>
+                  <code className="tx-ref">{tx.id}</code>
+                </td>
+                <td>{tx.propertyTitle}</td>
+                <td>{tx.buyerName}</td>
+                <td>{tx.sellerName}</td>
+                <td>{formatMoney(tx.salePrice || 0)}</td>
+                <td>
+                  {new Date(tx.updatedAt || tx.createdAt).toLocaleDateString()}
+                </td>
+              </tr>
+            ))}
+            {transactions.length === 0 && (
+              <tr>
+                <td colSpan={6}>
+                  <div className="empty-dashboard">
+                    <AwardIcon />
+                    <p className="muted">No completed transfers yet.</p>
+                  </div>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Agency Reports ---------- */
+
+function AgencyReports({ transactions, formatMoney }: any) {
+  const totalValue = transactions.reduce(
+    (sum: number, tx: any) => sum + (tx.salePrice || 0),
+    0,
+  );
+  const totalFees = transactions.reduce(
+    (sum: number, tx: any) => sum + (tx.agencyFee || 0),
+    0,
+  );
+
+  return (
+    <div className="container">
+      <div className="agency-page-header">
+        <h1 className="display">Reports</h1>
+        <p className="muted">Agency transaction reports and analytics.</p>
+      </div>
+
+      <div className="agency-stats">
+        <div className="stat-card">
+          <span>Total Transactions</span>
+          <strong>{transactions.length}</strong>
+        </div>
+        <div className="stat-card">
+          <span>Total Value</span>
+          <strong>{formatMoney(totalValue)}</strong>
+        </div>
+        <div className="stat-card">
+          <span>Total Agency Fees</span>
+          <strong>{formatMoney(totalFees)}</strong>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Agency Settings ---------- */
+
+function AgencySettings({ personnel, formatMoney }: any) {
+  const canManage = true; // Simplified - would check role
+
+  return (
+    <div className="container">
+      <div className="agency-page-header">
+        <h1 className="display">Agency Settings</h1>
+        <p className="muted">
+          Configure agency personnel and operational settings.
+        </p>
+      </div>
+
+      <div className="agency-card">
+        <h3>Agency Personnel</h3>
+        <p className="muted">
+          Manage agency staff who can process transactions and review documents.
+        </p>
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {personnel.map((p: any) => (
+                <tr key={p.id}>
+                  <td><strong>{p.name}</strong></td>
+                  <td>{p.email}</td>
+                  <td>{p.role}</td>
+                  <td>
+                    <span className="badge badge-status">
+                      {p.isActive ? "Active" : "Inactive"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              {personnel.length === 0 && (
+                <tr>
+                  <td colSpan={4}>
+                    <div className="empty-dashboard">
+                      <Users size={24} />
+                      <p className="muted">No agency personnel configured.</p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Helper Icons ---------- */
+
+function AwardIcon() {
+  return (
+    <svg
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" y1="8" r="7" />
+      <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.89" />
+    </svg>
+  );
 }

@@ -1,4 +1,4 @@
-import { MarketplaceProperty } from "./marketplace";
+import type { MarketplaceProperty } from "./marketplace";
 import { SupabaseAdapter } from "./storage-adapter";
 import { supabase } from "./supabase";
 

@@ -4,23 +4,54 @@ import { FormEvent, useState } from "react";
 import { ArrowRight, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { authenticate, setStoredSession } from "@/lib/demo-auth";
+import {
+  authenticate,
+  readPendingUsers,
+  setStoredSession,
+} from "@/lib/demo-auth";
 import { YuTaraLogo } from "@/components/YuTaraLogo";
-import { isDemoMode } from "@/lib/runtime-config";
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!email.trim()) return setError("Email is required.");
-    if (!email.includes("@")) return setError("Enter a valid email address.");
-    if (!password) return setError("Password is required.");
+    setSubmitting(true);
+    setError("");
+    if (!email.trim()) {
+      setSubmitting(false);
+      setError("Email is required.");
+      return;
+    }
+    if (!email.includes("@")) {
+      setSubmitting(false);
+      setError("Enter a valid email address.");
+      return;
+    }
+    if (!password) {
+      setSubmitting(false);
+      setError("Password is required.");
+      return;
+    }
     const session = authenticate(email, password);
-    if (!session) return setError("Invalid email or password.");
+    if (!session) {
+      setSubmitting(false);
+      const pending = readPendingUsers().find(
+        (user) => user.email === email.trim().toLowerCase(),
+      );
+      setError(
+        pending?.status === "PENDING"
+          ? "Your application is still pending administrator approval. You can sign in after it is approved."
+          : pending?.status === "DENIED"
+            ? "Your application was not approved. Please contact YuTara support for next steps."
+            : "Invalid email or password.",
+      );
+      return;
+    }
     setStoredSession(session);
     const next = new URLSearchParams(window.location.search).get("next");
     const safeNext =
@@ -94,8 +125,8 @@ export default function LoginPage() {
                 {error}
               </p>
             )}
-            <button className="button button-primary" type="submit">
-              Login <ArrowRight size={15} />
+            <button className="button button-primary" type="submit" disabled={submitting}>
+              {submitting ? "Signing you in…" : "Login"} <ArrowRight size={15} />
             </button>
           </form>
           <p className="login-register">
@@ -104,15 +135,6 @@ export default function LoginPage() {
               Register here
             </Link>
           </p>
-          {isDemoMode && (
-            <div className="demo-accounts">
-              <strong>Sample accounts</strong>
-              <span>
-                admin@yutara.com · admin2@yutara.com · admin3@yutara.com
-              </span>
-              <span>Password: 12345</span>
-            </div>
-          )}
         </div>
       </section>
     </main>

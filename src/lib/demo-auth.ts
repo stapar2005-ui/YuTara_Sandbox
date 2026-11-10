@@ -1,6 +1,12 @@
 import { isDemoMode } from "./runtime-config";
 
-export type DemoRole = "ADMIN" | "USER";
+export type DemoRole =
+  | "USER"
+  | "ADMIN"
+  | "AGENCY_ADMIN"
+  | "AGENCY_OFFICER"
+  | "AGENCY_PROCESSOR"
+  | "AGENCY_VIEWER";
 
 export type DemoUser = {
   email: string;
@@ -15,17 +21,35 @@ export const DEMO_ACCOUNTS: Record<string, DemoUser & { password: string }> = {
     role: "ADMIN",
     name: "YuTara Admin 1",
   },
-  "admin2@yutara.com": {
-    email: "admin2@yutara.com",
+  "buyer@yutara.com": {
+    email: "buyer@yutara.com",
     password: "12345",
-    role: "ADMIN",
-    name: "YuTara Admin 2",
+    role: "USER",
+    name: "Juan Buyer",
   },
-  "admin3@yutara.com": {
-    email: "admin3@yutara.com",
+  "seller@yutara.com": {
+    email: "seller@yutara.com",
     password: "12345",
-    role: "ADMIN",
-    name: "YuTara Admin 3",
+    role: "USER",
+    name: "Maria Seller",
+  },
+  "agency.admin@yutara.com": {
+    email: "agency.admin@yutara.com",
+    password: "12345",
+    role: "AGENCY_ADMIN",
+    name: "Agency Admin",
+  },
+  "agency.officer@yutara.com": {
+    email: "agency.officer@yutara.com",
+    password: "12345",
+    role: "AGENCY_OFFICER",
+    name: "Agency Officer",
+  },
+  "agency.processor@yutara.com": {
+    email: "agency.processor@yutara.com",
+    password: "12345",
+    role: "AGENCY_PROCESSOR",
+    name: "Agency Processor",
   },
 };
 
@@ -55,9 +79,27 @@ function emitSessionChange(): void {
 
 export function authenticate(email: string, password: string): DemoUser | null {
   if (!isDemoMode) return null;
-  const account = DEMO_ACCOUNTS[email.trim().toLowerCase()];
-  if (!account || account.password !== password) return null;
-  return { email: account.email, role: account.role, name: account.name };
+  const normalizedEmail = email.trim().toLowerCase();
+  const account = DEMO_ACCOUNTS[normalizedEmail];
+  if (account && account.password === password) {
+    return { email: account.email, role: account.role, name: account.name };
+  }
+
+  const approvedUser = readPendingUsers().find(
+    (user) =>
+      user.email === normalizedEmail &&
+      user.status === "APPROVED" &&
+      user.password === password,
+  );
+  if (approvedUser) {
+    return {
+      email: approvedUser.email,
+      role: "USER",
+      name: approvedUser.name,
+    };
+  }
+
+  return null;
 }
 
 export function getStoredSession(): DemoUser | null {
@@ -70,7 +112,12 @@ export function getStoredSession(): DemoUser | null {
       parsed &&
       typeof parsed === "object" &&
       typeof parsed.email === "string" &&
-      (parsed.role === "ADMIN" || parsed.role === "USER")
+      (parsed.role === "ADMIN" ||
+        parsed.role === "USER" ||
+        parsed.role === "AGENCY_ADMIN" ||
+        parsed.role === "AGENCY_OFFICER" ||
+        parsed.role === "AGENCY_PROCESSOR" ||
+        parsed.role === "AGENCY_VIEWER")
     ) {
       return {
         email: parsed.email,
