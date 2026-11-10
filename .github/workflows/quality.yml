@@ -11,6 +11,9 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy-anon-key
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
