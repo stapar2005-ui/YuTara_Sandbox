@@ -1,7 +1,16 @@
 "use client";
 
-import { ArrowRight, Heart, MapPin, Road } from "lucide-react";
+import { ArrowRight, Heart, MapPin } from "lucide-react";
 import { getListingStatus, money, Property, roadAccessLabel } from "@/lib/marketplace";
+
+const STATUS_CONFIG: Record<string, { label: string; variant: "green" | "amber" | "red" | "gray" }> = {
+  OPEN_FOR_OFFERS: { label: "Open for Offers", variant: "green" },
+  BOOKING_REQUESTED: { label: "Booking Requested", variant: "amber" },
+  RESERVED: { label: "Reserved", variant: "amber" },
+  CLOSED: { label: "Closed", variant: "gray" },
+  SOLD: { label: "Sold", variant: "red" },
+  TERMINATED: { label: "Terminated", variant: "red" },
+};
 
 export function PropertyCard({
   property,
@@ -17,22 +26,12 @@ export function PropertyCard({
   onRequestBooking?: () => void;
 }) {
   const status = getListingStatus(property);
+  const config = STATUS_CONFIG[status] || STATUS_CONFIG.OPEN_FOR_OFFERS;
   const isBookable = status === "OPEN_FOR_OFFERS";
   const pricePerSqm = property.area > 0 ? Math.round(property.price / property.area) : 0;
 
-  const BUYER_BADGE: Record<string, { label: string; color: string }> = {
-    OPEN_FOR_OFFERS: { label: "Available for Booking", color: "#166534" },
-    BOOKING_REQUESTED: { label: "In Escrow Review", color: "#d97706" },
-    RESERVED: { label: "Reserved", color: "#d97706" },
-    CLOSED: { label: "Closed", color: "#64748b" },
-    SOLD: { label: "Sold", color: "#b91c1c" },
-    TERMINATED: { label: "Terminated", color: "#b91c1c" },
-  };
-
-  const badge = BUYER_BADGE[status] || BUYER_BADGE.OPEN_FOR_OFFERS;
-
   return (
-    <article className="property-card group">
+    <article className="property-card group fade-up">
       <div
         className="property-image"
         style={{
@@ -40,50 +39,52 @@ export function PropertyCard({
           backgroundPosition: property.imagePosition || "center",
         }}
       >
-        <div className="badge-row">
-          <span
-            className="badge badge-status"
-            style={{ backgroundColor: badge.color, color: "#ffffff" }}
-          >
-            {badge.label}
-          </span>
-          {property.promoted && (
-            <span className="badge badge-promoted">Promoted</span>
-          )}
-          <button
-            className="save-float"
-            aria-label={saved ? "Remove saved property" : "Save property"}
-            onClick={onSave}
-          >
-            <Heart
-              size={16}
-              fill={saved ? "#d79c43" : "none"}
-              color={saved ? "#d79c43" : "currentColor"}
-            />
-          </button>
-        </div>
+        <span className={`badge badge-${config.variant}`}>
+          {config.label}
+        </span>
+        {property.promoted && (
+          <span className="badge badge-gray">Promoted</span>
+        )}
         <button
-          className="book-request-float"
-          aria-label="Request booking"
-          disabled={!isBookable}
-          onClick={onRequestBooking}
+          className="save-float"
+          aria-label={saved ? "Remove saved property" : "Save property"}
+          onClick={onSave}
         >
-          <ArrowRight size={14} />
+          <Heart
+            size={16}
+            fill={saved ? "#d79c43" : "none"}
+            color={saved ? "#d79c43" : "currentColor"}
+          />
         </button>
+        {isBookable && onRequestBooking && (
+          <button
+            className="book-request-float"
+            aria-label="Request booking"
+            onClick={onRequestBooking}
+          >
+            <ArrowRight size={14} />
+          </button>
+        )}
       </div>
       <div className="property-body">
-        <div className="property-type">{property.type || property.propertyType} lot</div>
-        <h3>{property.title}</h3>
+        <div className="property-type">
+          {property.type || property.propertyType} lot
+        </div>
+        <h3 className="property-title">{property.title}</h3>
         <div className="property-location">
           <MapPin size={14} /> {property.barangay}, {property.city}
         </div>
-        <div className="property-meta">
-          <span className="price">{money(property.price)}</span>
-          <span className="price-per-sqm">· ₱{pricePerSqm.toLocaleString()}/sqm</span>
-          <span className="area">{property.area.toLocaleString()} sqm</span>
+        <div className="property-meta" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: "8px" }}>
+          <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+            <span className="price">{money(property.price)}</span>
+            <span className="price-per-sqm" style={{ fontSize: "0.74rem", color: "#666" }}>
+              ₱{pricePerSqm.toLocaleString()}/sqm
+            </span>
+          </div>
+          <span className="area" style={{ whiteSpace: "nowrap", marginLeft: "auto" }}>{property.area.toLocaleString()} sqm</span>
         </div>
         <div className="property-road-access">
-          <Road size={12} />
+          <MapPin size={12} />
           <span>{roadAccessLabel[property.roadAccess]}</span>
         </div>
         {!isBookable && (
@@ -99,7 +100,7 @@ export function PropertyCard({
                     : "This listing is no longer available."}
           </p>
         )}
-        <button className="button button-ghost card-action" onClick={onOpen}>
+        <button className="btn btn-ghost card-action" onClick={onOpen}>
           View property <ArrowRight size={15} />
         </button>
       </div>

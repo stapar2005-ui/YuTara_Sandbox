@@ -165,8 +165,21 @@ export function PromotedCarousel({
         <div className="featured-overlay" />
         <div className="featured-content">
           {badges}
+          <button
+            className="featured-save featured-save-desktop"
+            aria-label={
+              saved.includes(property.id) ? "Remove saved property" : "Save property"
+            }
+            onClick={() => onSave(property.id)}
+          >
+            <Heart
+              size={17}
+              fill={saved.includes(property.id) ? "#d79c43" : "none"}
+              color={saved.includes(property.id) ? "#d79c43" : "currentColor"}
+            />
+          </button>
           <div className="property-type">{property.type || property.propertyType} lot</div>
-          <h3>{property.title}</h3>
+          <h3 className="featured-title">{property.title}</h3>
           <p className="featured-location">
             <MapPin size={15} /> {property.barangay}, {property.city},{" "}
             {property.province}
@@ -177,7 +190,6 @@ export function PromotedCarousel({
           </div>
           <div className="featured-actions">
             {viewButton}
-            {saveButton}
           </div>
         </div>
       </div>

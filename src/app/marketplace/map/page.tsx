@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ArrowRight, Check, MapPin } from "lucide-react";
-import { AppNav } from "@/components/AppNav";
+import { MarketplaceRouteLayout } from "@/components/MarketplaceRouteLayout";
 import {
   formatMoney,
   isActiveListing,
@@ -13,17 +14,85 @@ import {
 import { readProperties, PROPERTIES_EVENT } from "@/lib/property-store";
 import { DemoUser, getStoredSession } from "@/lib/demo-auth";
 
+type MapMarkerGroup = {
+  properties: MarketplaceProperty[];
+  leftPct: number;
+  topPct: number;
+};
+
+function getMapPosition(property: MarketplaceProperty) {
+  const minLat = 7.25;
+  const maxLat = 7.36;
+  const minLng = 125.62;
+  const maxLng = 125.75;
+  return {
+    leftPct: Math.max(10, Math.min(85, ((property.longitude - minLng) / (maxLng - minLng)) * 100)),
+    topPct: Math.max(10, Math.min(80, (1 - (property.latitude - minLat) / (maxLat - minLat)) * 100)),
+  };
+}
+
+function groupNearbyListings(
+  properties: MarketplaceProperty[],
+  canvasWidth: number,
+  canvasHeight: number,
+): MapMarkerGroup[] {
+  const positioned = properties.map((property) => ({ property, ...getMapPosition(property) }));
+  // Group pins whose labels would touch at the current viewport size.
+  const markerWidth = canvasWidth <= 560 ? 48 : 116;
+  const markerHeight = canvasWidth <= 560 ? 44 : 46;
+  const groups: MapMarkerGroup[] = [];
+  positioned.forEach((item) => {
+    const nearbyGroup = groups.find((group) => {
+      const deltaX = Math.abs(group.leftPct - item.leftPct) * canvasWidth / 100;
+      const deltaY = Math.abs(group.topPct - item.topPct) * canvasHeight / 100;
+      return deltaX < markerWidth && deltaY < markerHeight;
+    });
+    if (nearbyGroup) {
+      nearbyGroup.properties.push(item.property);
+    } else {
+      groups.push({
+        properties: [item.property],
+        leftPct: item.leftPct,
+        topPct: item.topPct,
+      });
+    }
+  });
+  return groups;
+}
+
 export default function VerifiedMapPage() {
+  const router = useRouter();
   const [listings, setListings] = useState<MarketplaceProperty[]>([]);
   const [selectedId, setSelectedId] = useState<number | undefined>(undefined);
   const [session, setSession] = useState<DemoUser | null>(null);
+  const [canvasSize, setCanvasSize] = useState({ width: 900, height: 520 });
+  const mapCanvasRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const canvas = mapCanvasRef.current;
+    if (!canvas) return;
+    const updateSize = () => {
+      const { width, height } = canvas.getBoundingClientRect();
+      setCanvasSize((current) => current.width === width && current.height === height ? current : { width, height });
+    };
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(canvas);
+    updateSize();
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const sync = async () => {
+      const currentSession = getStoredSession();
+      setSession(currentSession);
+      if (currentSession?.role === "ADMIN") {
+        router.replace("/?view=admin#land-listings");
+        return;
+      }
       const next = (await readProperties()).filter(isActiveListing);
       setListings(next);
       setSelectedId((current) => current ?? next[0]?.id);
-      setSession(getStoredSession());
+      setSession(currentSession);
     };
     const timer = window.setTimeout(sync, 0);
     window.addEventListener(PROPERTIES_EVENT, sync);
@@ -33,16 +102,20 @@ export default function VerifiedMapPage() {
       window.removeEventListener(PROPERTIES_EVENT, sync);
       window.removeEventListener("storage", sync);
     };
-  }, []);
+  }, [router]);
 
   const selected = useMemo(
     () => listings.find((property) => property.id === selectedId) ?? listings[0],
     [listings, selectedId],
   );
+  const markerGroups = useMemo(
+    () => groupNearbyListings(listings, canvasSize.width, canvasSize.height),
+    [listings, canvasSize],
+  );
+  const selectedGroup = markerGroups.find((group) => group.properties.some((property) => property.id === selected?.id));
   return (
-    <div className="app-shell">
-      <AppNav session={session} />
-      <main className="map-page">
+    <MarketplaceRouteLayout session={session} pageTitle="Map view">
+      <div className="map-page">
         <div className="container">
           <div className="map-heading">
             <div>
@@ -58,30 +131,45 @@ export default function VerifiedMapPage() {
             </Link>
           </div>
           <div className="map-layout">
-            <section className="map-canvas" aria-label="Property map">
+            <section className="map-canvas" aria-label="Property map" ref={mapCanvasRef}>
               <div className="map-watermark">PANABO CITY</div>
               <div className="map-road road-one" />
               <div className="map-road road-two" />
-              {listings.map((property, index) => (
-                <button
-                  key={property.id}
-                  className={`map-marker ${selected?.id === property.id ? "selected" : ""}`}
-                  style={{
-                    left: `${14 + ((index * 19) % 72)}%`,
-                    top: `${18 + ((index * 27) % 62)}%`,
-                  }}
-                  onClick={() => setSelectedId(property.id)}
-                  aria-label={`Select ${property.title}`}
-                >
-                  <MapPin size={17} />
-                  <span>{formatMoney(property.price)}</span>
-                </button>
-              ))}
+              {markerGroups.map((group) => {
+                const selectedIndex = group.properties.findIndex((property) => property.id === selected?.id);
+                const markerProperty = selectedIndex >= 0 ? group.properties[selectedIndex] : group.properties[0];
+                const isCluster = group.properties.length > 1;
+                return (
+                  <button
+                    key={group.properties[0].id}
+                    className={`map-marker ${isCluster ? "map-cluster" : ""} ${selected?.id === markerProperty.id ? "selected" : ""}`}
+                    style={{
+                      left: `${group.leftPct}%`,
+                      top: `${group.topPct}%`,
+                    }}
+                    onClick={() => {
+                      const nextIndex = selectedIndex < 0 ? 0 : (selectedIndex + 1) % group.properties.length;
+                      setSelectedId(group.properties[nextIndex].id);
+                    }}
+                    aria-label={isCluster
+                      ? `${group.properties.length} nearby listings. Showing ${Math.max(selectedIndex, 0) + 1} of ${group.properties.length}: ${markerProperty.title}. Click to cycle.`
+                      : `Select ${markerProperty.title}`}
+                    title={isCluster ? `${group.properties.length} nearby listings — click to cycle` : markerProperty.title}
+                  >
+                    <MapPin size={17} />
+                    <span>{isCluster ? `${group.properties.length} nearby` : formatMoney(markerProperty.price)}</span>
+                  </button>
+                );
+              })}
               <p className="map-disclaimer">
-                Map boundaries are for discovery and reference only and do not replace an official land survey.
+                Nearby listings are grouped for clarity. Locations are approximate and do not replace an official land survey.
               </p>
             </section>
-            {selected && <MapPropertyPreview property={selected} />}
+            {selected && <MapPropertyPreview
+              property={selected}
+              nearbyListings={selectedGroup?.properties ?? [selected]}
+              onSelect={setSelectedId}
+            />}
           </div>
           <div className="map-list">
             <div className="section-heading">
@@ -108,12 +196,20 @@ export default function VerifiedMapPage() {
             </div>
           </div>
         </div>
-      </main>
-    </div>
+      </div>
+    </MarketplaceRouteLayout>
   );
 }
 
-function MapPropertyPreview({ property }: { property: MarketplaceProperty }) {
+function MapPropertyPreview({
+  property,
+  nearbyListings,
+  onSelect,
+}: {
+  property: MarketplaceProperty;
+  nearbyListings: MarketplaceProperty[];
+  onSelect: (id: number) => void;
+}) {
   return (
     <aside className="map-preview">
       <div className="eyebrow">Selected property</div>
@@ -126,6 +222,19 @@ function MapPropertyPreview({ property }: { property: MarketplaceProperty }) {
         <div className="spec"><span>Type</span><strong>{property.propertyType}</strong></div>
         <div className="spec"><span>Road</span><strong>{roadAccessLabel[property.roadAccess]}</strong></div>
       </div>
+      {nearbyListings.length > 1 && <div className="map-nearby-listings" aria-label="Nearby listings">
+        <strong>{nearbyListings.length} nearby listings</strong>
+        {nearbyListings.map((listing) => (
+          <button
+            key={listing.id}
+            type="button"
+            aria-pressed={listing.id === property.id}
+            onClick={() => onSelect(listing.id)}
+          >
+            {listing.title}
+          </button>
+        ))}
+      </div>}
       <p>{property.description}</p>
       <div className="map-preview-actions">
         <Link className="button button-primary" href={`/marketplace/${property.id}`}>Open details</Link>

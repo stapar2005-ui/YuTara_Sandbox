@@ -3,16 +3,32 @@ import type { Reservation } from "./reservation-service";
 import { cancelReservation } from "./reservation-service";
 import { SupabaseAdapter } from "./storage-adapter";
 import { supabase } from "./supabase";
+import { STAGE_ORDER as MODERN_STAGE_ORDER } from "./transaction-stage-service";
 
 export type TransactionStage =
+  | "AGREEMENT_CONFIRMED"
+  | "AGENCY_INTAKE"
+  | "DOCUMENT_COLLECTION"
+  | "DOCUMENT_REVIEW"
+  | "DOCUMENT_COMPLETION"
+  | "DEED_PREPARATION"
+  | "DEED_EXECUTION"
+  | "BIR_PROCESSING"
+  | "LOCAL_GOVERNMENT_PROCESSING"
+  | "REGISTRY_OF_DEEDS_PROCESSING"
+  | "NEW_TITLE_ISSUANCE"
+  | "TAX_DECLARATION_UPDATE"
+  | "COMPLETED"
+  | "ON_HOLD"
+  | "CANCELLED"
+  | "TERMINATED"
+  // Backward compatibility aliases
   | "BOOKING_REQUESTED"
   | "AGENCY_REVIEW"
   | "PAYMENT_HELD"
   | "DOCUMENTS_PREPARED"
   | "PARTIES_SIGNED"
-  | "FUNDS_RELEASED"
-  | "COMPLETED"
-  | "CANCELLED";
+  | "FUNDS_RELEASED";
 
 export type TransactionActor = "BUYER" | "SELLER" | "AGENCY" | "SYSTEM";
 
@@ -64,30 +80,49 @@ export type Transaction = {
 export const TRANSACTIONS_KEY = "yutara-transactions";
 export const TRANSACTIONS_EVENT = "yutara-transactions-change";
 
-export const STAGE_ORDER: TransactionStage[] = [
-  "BOOKING_REQUESTED",
-  "AGENCY_REVIEW",
-  "PAYMENT_HELD",
-  "DOCUMENTS_PREPARED",
-  "PARTIES_SIGNED",
-  "FUNDS_RELEASED",
-  "COMPLETED",
-];
+export const STAGE_ORDER: TransactionStage[] = [...MODERN_STAGE_ORDER];
 
 export const STAGE_LABEL: Record<TransactionStage, string> = {
+  AGREEMENT_CONFIRMED: "Agreement Confirmed",
+  AGENCY_INTAKE: "Agency Intake",
+  DOCUMENT_COLLECTION: "Document Collection",
+  DOCUMENT_REVIEW: "Document Review",
+  DOCUMENT_COMPLETION: "Document Completion",
+  DEED_PREPARATION: "Deed Preparation",
+  DEED_EXECUTION: "Deed Execution",
+  BIR_PROCESSING: "BIR Processing",
+  LOCAL_GOVERNMENT_PROCESSING: "Local Government Processing",
+  REGISTRY_OF_DEEDS_PROCESSING: "Registry of Deeds Processing",
+  NEW_TITLE_ISSUANCE: "New Title Issuance",
+  TAX_DECLARATION_UPDATE: "Tax Declaration Update",
+  COMPLETED: "Transaction complete",
+  ON_HOLD: "On Hold",
+  CANCELLED: "Cancelled",
+  TERMINATED: "Terminated",
+  // Backward compatibility aliases
   BOOKING_REQUESTED: "Booking requested",
   AGENCY_REVIEW: "Agency review",
   PAYMENT_HELD: "Payment held in escrow",
   DOCUMENTS_PREPARED: "Documents prepared",
   PARTIES_SIGNED: "Parties signed",
   FUNDS_RELEASED: "Funds released",
-  COMPLETED: "Transaction complete",
-  CANCELLED: "Cancelled",
 };
+
+const LEGACY_STAGE_ALIASES: TransactionStage[] = [
+  "BOOKING_REQUESTED",
+  "AGENCY_REVIEW",
+  "PAYMENT_HELD",
+  "DOCUMENTS_PREPARED",
+  "PARTIES_SIGNED",
+  "FUNDS_RELEASED",
+];
 
 const VALID_STAGES: TransactionStage[] = [
   ...STAGE_ORDER,
+  "ON_HOLD",
   "CANCELLED",
+  "TERMINATED",
+  ...LEGACY_STAGE_ALIASES,
 ];
 
 const storage = new SupabaseAdapter(supabase, TRANSACTIONS_KEY);
@@ -182,7 +217,7 @@ export async function createTransactionFromReservation(input: {
     balance: Math.max(property.price - reservation.reservationFee, 0),
     escrowHeld: reservation.reservationFee,
     agencyFee,
-    stage: "BOOKING_REQUESTED",
+    stage: "AGREEMENT_CONFIRMED",
     payments: [
       {
         id: `PAY-${Date.now()}-RES`,
@@ -256,11 +291,11 @@ export async function agencyReview(
   note?: string,
 ): Promise<Transaction | null> {
   return updateTransaction(id, (tx) => {
-    if (tx.stage !== "BOOKING_REQUESTED") return tx;
+    if (tx.stage !== "AGREEMENT_CONFIRMED" && tx.stage !== "BOOKING_REQUESTED") return tx;
     if (decision === "APPROVED") {
       return {
         ...tx,
-        stage: "AGENCY_REVIEW",
+        stage: "AGENCY_INTAKE",
         events: [
           ...tx.events,
           event(
@@ -292,7 +327,7 @@ export async function holdPayment(
   method: string,
 ): Promise<Transaction | null> {
   return updateTransaction(id, (tx) => {
-    if (tx.stage !== "AGENCY_REVIEW") return tx;
+    if (tx.stage !== "AGENCY_INTAKE" && tx.stage !== "AGENCY_REVIEW") return tx;
     return {
       ...tx,
       stage: "PAYMENT_HELD",
@@ -324,7 +359,7 @@ export async function prepareDocuments(
     if (!documents || documents.length === 0) return tx;
     return {
       ...tx,
-      stage: "DOCUMENTS_PREPARED",
+      stage: "DOCUMENT_COLLECTION",
       documentsPrepared: documents,
       events: [
         ...tx.events,
@@ -344,7 +379,7 @@ export async function recordSigning(
   party: "BUYER" | "SELLER",
 ): Promise<Transaction | null> {
   return updateTransaction(id, (tx) => {
-    if (tx.stage !== "DOCUMENTS_PREPARED") return tx;
+    if (tx.stage !== "DOCUMENT_COLLECTION" && tx.stage !== "DOCUMENTS_PREPARED") return tx;
     if (tx.documentsPrepared.length === 0) return tx;
     const alreadySigned = tx.signedBy.includes(party);
     if (alreadySigned) return tx;
@@ -434,7 +469,16 @@ export async function cancelTransaction(
 }
 
 export function stageIndex(stage: TransactionStage): number {
-  const index = STAGE_ORDER.indexOf(stage);
+  const legacyStageMap: Partial<Record<TransactionStage, TransactionStage>> = {
+    BOOKING_REQUESTED: "AGREEMENT_CONFIRMED",
+    AGENCY_REVIEW: "AGENCY_INTAKE",
+    PAYMENT_HELD: "DOCUMENT_COLLECTION",
+    DOCUMENTS_PREPARED: "DEED_PREPARATION",
+    PARTIES_SIGNED: "BIR_PROCESSING",
+    FUNDS_RELEASED: "TAX_DECLARATION_UPDATE",
+  };
+  const canonicalStage = legacyStageMap[stage] ?? stage;
+  const index = STAGE_ORDER.indexOf(canonicalStage);
   return index < 0 ? 0 : index;
 }
 

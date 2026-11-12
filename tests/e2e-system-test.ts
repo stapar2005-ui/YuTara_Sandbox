@@ -206,10 +206,12 @@ describe("YuTara Marketplace E2E System Test Suite", () => {
         name: "Pedro Penduko",
         password: "securepass123",
         id1: "passport.jpg",
+        mobile: "09171234567",
       });
 
       assert.ok(pending.id.startsWith("PEND-"));
       assert.strictEqual(pending.status, "PENDING");
+      assert.strictEqual(pending.mobile, "09171234567");
       assert.strictEqual(isEmailRegisteredOrPending("newperson@test.ph"), true);
 
       // Cannot authenticate while PENDING
@@ -219,6 +221,7 @@ describe("YuTara Marketplace E2E System Test Suite", () => {
       const approved = approvePendingUser(pending.id, "admin@yutara.com");
       assert.ok(approved);
       assert.strictEqual(approved.status, "APPROVED");
+      assert.strictEqual(isEmailRegisteredOrPending("newperson@test.ph"), true);
 
       // Now user can authenticate
       const authenticated = authenticate("newperson@test.ph", "securepass123");
@@ -493,7 +496,7 @@ describe("YuTara Marketplace E2E System Test Suite", () => {
   // 5. Full Transaction & Escrow Pipeline (7-Stage Machine)
   // -----------------------------------------------------------------------
   describe("5. End-to-End Transaction & Escrow Pipeline", () => {
-    it("runs complete 7-stage transaction pipeline from booking to completion", async () => {
+    it("runs complete 16-stage transaction pipeline from booking to completion", async () => {
       const property = getProperty(1)!;
       const { reservation } = await createReservation(property, "buyer@yutara.com");
       assert.ok(reservation);
@@ -507,17 +510,17 @@ describe("YuTara Marketplace E2E System Test Suite", () => {
       });
 
       assert.ok(tx.id.startsWith("YTR-TX-"));
-      assert.strictEqual(tx.stage, "BOOKING_REQUESTED");
+      assert.strictEqual(tx.stage, "AGREEMENT_CONFIRMED");
       assert.strictEqual(tx.salePrice, property.price);
       assert.strictEqual(tx.reservationFee, 25000);
       assert.strictEqual(tx.balance, property.price - 25000);
       assert.strictEqual(tx.agencyFee, Math.round(property.price * 0.025), "Agency fee must be 2.5%");
       assert.strictEqual(tx.escrowHeld, 25000);
 
-      // Stage 1: Agency Review
+      // Stage 1: Agency Intake
       const reviewResult = await agencyReview(tx.id, "AGENCY", "APPROVED", "Approved by Panabo Land Desk");
       assert.ok(reviewResult);
-      assert.strictEqual(reviewResult.stage, "AGENCY_REVIEW");
+      assert.strictEqual(reviewResult.stage, "AGENCY_INTAKE");
 
       // Stage 2: Payment Held in Escrow
       const heldResult = await holdPayment(tx.id, "AGENCY", "Bank Transfer");
@@ -528,14 +531,14 @@ describe("YuTara Marketplace E2E System Test Suite", () => {
       const docs = ["Deed of Absolute Sale", "BIR eCAR Form", "Transfer Tax Receipt"];
       const docsResult = await prepareDocuments(tx.id, "AGENCY", docs, "All transfer documents generated");
       assert.ok(docsResult);
-      assert.strictEqual(docsResult.stage, "DOCUMENTS_PREPARED");
+      assert.strictEqual(docsResult.stage, "DOCUMENT_COLLECTION");
       assert.strictEqual(docsResult.documentsPrepared.length, 3);
 
       // Stage 4: Parties Signing
       // Buyer signs first
       const buyerSign = await recordSigning(tx.id, "BUYER", "BUYER");
       assert.ok(buyerSign);
-      assert.strictEqual(buyerSign.stage, "DOCUMENTS_PREPARED", "Should remain in DOCUMENTS_PREPARED until both sign");
+      assert.strictEqual(buyerSign.stage, "DOCUMENT_COLLECTION", "Should remain in DOCUMENT_COLLECTION until both sign");
       assert.deepStrictEqual(buyerSign.signedBy, ["BUYER"]);
 
       // Seller signs second
@@ -556,8 +559,12 @@ describe("YuTara Marketplace E2E System Test Suite", () => {
       assert.strictEqual(completedResult.stage, "COMPLETED");
 
       // Verify stage indices
+      assert.strictEqual(stageIndex("AGREEMENT_CONFIRMED"), 0);
+      assert.strictEqual(stageIndex("COMPLETED"), 12);
       assert.strictEqual(stageIndex("BOOKING_REQUESTED"), 0);
-      assert.strictEqual(stageIndex("COMPLETED"), 6);
+      assert.strictEqual(stageIndex("AGENCY_REVIEW"), 1);
+      assert.strictEqual(stageIndex("PAYMENT_HELD"), 2);
+      assert.strictEqual(stageIndex("DOCUMENTS_PREPARED"), 5);
     });
 
     it("ERROR VERIFICATION: Enforces strict stage sequence gates", async () => {
@@ -569,21 +576,21 @@ describe("YuTara Marketplace E2E System Test Suite", () => {
         buyerName: "Juan Buyer",
       });
 
-      // Cannot hold payment while in BOOKING_REQUESTED (must be AGENCY_REVIEW)
+      // Cannot hold payment while in AGREEMENT_CONFIRMED (must be AGENCY_INTAKE)
       const prematureHold = await holdPayment(tx.id, "AGENCY", "Cash");
-      assert.strictEqual(prematureHold?.stage, "BOOKING_REQUESTED", "Cannot skip to PAYMENT_HELD");
+      assert.strictEqual(prematureHold?.stage, "AGREEMENT_CONFIRMED", "Cannot skip to PAYMENT_HELD");
 
-      // Cannot prepare documents while in BOOKING_REQUESTED
+      // Cannot prepare documents while in AGREEMENT_CONFIRMED
       const prematureDocs = await prepareDocuments(tx.id, "AGENCY", ["Deed"]);
-      assert.strictEqual(prematureDocs?.stage, "BOOKING_REQUESTED", "Cannot skip to DOCUMENTS_PREPARED");
+      assert.strictEqual(prematureDocs?.stage, "AGREEMENT_CONFIRMED", "Cannot skip to DOCUMENT_COLLECTION");
 
       // Cannot release funds before PARTIES_SIGNED
       const prematureRelease = await releaseFunds(tx.id, "AGENCY");
-      assert.strictEqual(prematureRelease?.stage, "BOOKING_REQUESTED", "Cannot release funds before signing");
+      assert.strictEqual(prematureRelease?.stage, "AGREEMENT_CONFIRMED", "Cannot release funds before signing");
 
       // Cannot complete transaction before FUNDS_RELEASED
       const prematureComplete = await completeTransaction(tx.id, "AGENCY");
-      assert.strictEqual(prematureComplete?.stage, "BOOKING_REQUESTED", "Cannot complete prematurely");
+      assert.strictEqual(prematureComplete?.stage, "AGREEMENT_CONFIRMED", "Cannot complete prematurely");
     });
 
     it("ERROR VERIFICATION: Prevents cancellation of already COMPLETED transactions", async () => {

@@ -42,7 +42,10 @@ export function AppNav({ session }: { session: DemoUser | null }) {
     };
   }, [session]);
 
-  const isAgency = session && session.role.startsWith("AGENCY");
+  const isAgency = session?.role.startsWith("AGENCY") ?? false;
+  const isAdmin = session?.role === "ADMIN";
+  const workspaceHref = isAdmin ? "/?view=admin#land-listings" : isAgency ? "/agency" : "/marketplace";
+  const workspaceLabel = isAdmin ? "Land Listings" : isAgency ? "Agency Portal" : "My YuTara";
 
   async function handleMarkRead(id: string) {
     await markNotificationRead(id);
@@ -53,7 +56,7 @@ export function AppNav({ session }: { session: DemoUser | null }) {
   function logout() {
     clearStoredSession();
     setStoredTheme("light");
-    router.replace("/");
+    window.location.replace("/");
   }
 
   return (
@@ -62,6 +65,13 @@ export function AppNav({ session }: { session: DemoUser | null }) {
         <Link className="brand" href="/">
           <YuTaraLogo priority />
         </Link>
+        <nav className="public-site-links" aria-label="Public pages">
+          <Link href="/">Home</Link>
+          {!isAdmin && <Link href="/marketplace">Marketplace</Link>}
+          <Link href="/about">About Us</Link>
+          <Link href="/services">Services Offered</Link>
+          <Link href="/contact">Contact Us</Link>
+        </nav>
         <div className="nav-actions">
           {session ? (
             <>
@@ -156,19 +166,24 @@ export function AppNav({ session }: { session: DemoUser | null }) {
               <span className="nav-auth">
                 <Link
                   className="button button-ghost"
-                  href={isAgency ? "/agency" : "/dashboard"}
+                  href={workspaceHref}
                 >
-                  {isAgency ? "Agency Portal" : "Dashboard"}
+                  {workspaceLabel}
                 </Link>
+                {session.role === "USER" && (
+                  <Link className="button button-ghost" href="/dashboard">
+                    My Properties
+                  </Link>
+                )}
                 <button className="button button-primary" onClick={logout}>
-                  Logout
+                  Log out
                 </button>
               </span>
             </>
           ) : (
             <span className="nav-auth">
               <Link className="button button-ghost" href="/login">
-                Login
+                Log in
               </Link>
               <Link className="button button-primary" href="/register">
                 Register
@@ -190,25 +205,52 @@ export function AppNav({ session }: { session: DemoUser | null }) {
           <Link href="/" onClick={() => setMobileNavOpen(false)}>
             Home
           </Link>
-          <Link href="/marketplace" onClick={() => setMobileNavOpen(false)}>
-            Marketplace
-          </Link>
-          <Link href="/#about" onClick={() => setMobileNavOpen(false)}>
+          {!isAdmin && (
+            <Link href="/marketplace" onClick={() => setMobileNavOpen(false)}>
+              Marketplace
+            </Link>
+          )}
+          <Link href="/about" onClick={() => setMobileNavOpen(false)}>
             About Us
+          </Link>
+          <Link href="/services" onClick={() => setMobileNavOpen(false)}>
+            Services Offered
+          </Link>
+          <Link href="/contact" onClick={() => setMobileNavOpen(false)}>
+            Contact Us
           </Link>
           {session ? (
             <>
-              <Link
-                href={isAgency ? "/agency" : "/dashboard"}
-                onClick={() => setMobileNavOpen(false)}
-              >
-                {isAgency ? "Agency Portal" : "Dashboard"}
-              </Link>
+              {isAdmin && (
+                <>
+                  <Link href="/?view=admin#land-listings" onClick={() => setMobileNavOpen(false)}>
+                    Land Listings
+                  </Link>
+                  <Link href="/?view=admin#user-registrations" onClick={() => setMobileNavOpen(false)}>
+                    User Registrations
+                  </Link>
+                </>
+              )}
+              {!isAdmin && (
+                <>
+                  <Link
+                    href={workspaceHref}
+                    onClick={() => setMobileNavOpen(false)}
+                  >
+                    {workspaceLabel}
+                  </Link>
+                  {session.role === "USER" && (
+                    <Link href="/dashboard" onClick={() => setMobileNavOpen(false)}>
+                      My Properties
+                    </Link>
+                  )}
+                </>
+              )}
             </>
           ) : (
             <>
               <Link href="/login" onClick={() => setMobileNavOpen(false)}>
-                Login
+                Log in
               </Link>
               <Link
                 href="/register"
@@ -224,16 +266,6 @@ export function AppNav({ session }: { session: DemoUser | null }) {
                 Signed in as {session.name}
               </div>
               <button
-                className="button button-primary"
-                onClick={() => {
-                  setMobileNavOpen(false);
-                  router.push(isAgency ? "/agency" : "/dashboard");
-                }}
-                style={{ width: "100%", marginBottom: 8 }}
-              >
-                {isAgency ? "Agency Portal" : "Dashboard"}
-              </button>
-              <button
                 className="button button-danger"
                 onClick={() => {
                   logout();
@@ -241,7 +273,7 @@ export function AppNav({ session }: { session: DemoUser | null }) {
                 }}
                 style={{ width: "100%" }}
               >
-                Logout
+                Log out
               </button>
             </div>
           )}

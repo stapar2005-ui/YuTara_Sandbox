@@ -10,14 +10,9 @@ import { formatMoney, MarketplaceProperty } from "@/lib/marketplace";
 import { readProperties } from "@/lib/property-store";
 import { PaymentPortal } from "@/components/PaymentPortal";
 import {
-  createReservation,
   Reservation,
   RESERVATION_FEE,
 } from "@/lib/reservation-service";
-import {
-  createTransactionFromReservation,
-  markBookingPaid,
-} from "@/lib/transactions";
 
 export default function ReservationPage() {
   const params = useParams<{ propertyId: string }>();
@@ -36,43 +31,40 @@ export default function ReservationPage() {
       const found =
         props.find((item) => item.id === Number(params.propertyId)) ?? null;
       setProperty(found);
+      const current = getStoredSession();
+      if (current) {
+        setSession(current);
+        if (found?.sellerEmail && found.sellerEmail === current.email) {
+          setError("You can't reserve your own listing.");
+        }
+      }
     }, 0);
     return () => window.clearTimeout(timer);
   }, [params.propertyId]);
 
-  useEffect(() => {
+  const startReservation = async () => {
     if (!property) return;
-    window.setTimeout(async () => {
-      const current = getStoredSession();
-      if (!current) {
-        router.replace(`/login?next=/reservation/${params.propertyId}`);
-        return;
-      }
-      setSession(current);
-      if (property.sellerEmail && property.sellerEmail === current.email) {
-        setError("You can't reserve your own listing.");
-        return;
-      }
-      const result = await createReservation(property, current.email);
-      if (result.error) {
-        setError(result.error);
-      } else {
-        setReservation(result.reservation ?? null);
-        setNeedsPayment(
-          result.reservation
-            ? result.reservation.status === "PENDING_PAYMENT"
-            : false,
-        );
-        if (result.reservation) {
-          await createTransactionFromReservation({
-            reservation: result.reservation,
-            property,
-            buyerName: current.name,
-          });
-        }
-      }
-    }, 0);
-  }, [property, router, params.propertyId]);
+    const current = getStoredSession();
+    if (!current) {
+      router.replace(`/login?next=/reservation/${params.propertyId}`);
+      return;
+    }
+    setSession(current);
+    if (property.sellerEmail && property.sellerEmail === current.email) {
+      setError("You can't reserve your own listing.");
+      return;
+    }
+    const { createReservation } = await import("@/lib/reservation-service");
+    const result = await createReservation(property, current.email);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    if (result.reservation) {
+      setReservation(result.reservation);
+      setNeedsPayment(result.reservation.status === "PENDING_PAYMENT");
+    }
+  };
 
   if (property === undefined) {
     return (
@@ -114,7 +106,7 @@ export default function ReservationPage() {
       <CheckoutNav />
       <main className="workspace">
         <div className="container reservation-shell">
-          <button className="back-button" onClick={() => router.back()}>
+          <button className="back-button" onClick={() => router.push(`/marketplace/${property.id}`)}>
             <ArrowLeft size={16} /> Back to property
           </button>
           <div className="eyebrow">Secure checkout</div>
@@ -143,8 +135,9 @@ export default function ReservationPage() {
                 reservation={reservation}
                 buyerName={session.name}
                 buyerEmail={session.email}
-                onConfirmed={(updated) => {
+                onConfirmed={async (updated) => {
                   setReservation(updated);
+                  const { markBookingPaid } = await import("@/lib/transactions");
                   markBookingPaid(updated.id, updated.paymentMethod || "Card");
                 }}
               />
@@ -179,10 +172,13 @@ export default function ReservationPage() {
               </section>
             )
           ) : (
-            <div className="pay-loading">
-              <span className="pay-spinner" />
-              Preparing your checkout…
-            </div>
+            <button
+              className="button button-primary"
+              onClick={startReservation}
+              disabled={!session}
+            >
+              {session ? "Reserve this property" : "Sign in to reserve"}
+            </button>
           )}
         </div>
       </main>

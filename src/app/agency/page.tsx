@@ -13,16 +13,23 @@ import { formatMoney } from "@/lib/marketplace";
 import type { Property } from "@/lib/marketplace";
 import {
   readTransactions,
+  createTransactionFromReservation,
+  agencyReview,
+  holdPayment,
+  prepareDocuments,
+  releaseFunds,
+  completeTransaction,
   Transaction,
   TRANSACTIONS_EVENT,
 } from "@/lib/transactions";
 import { readProperties } from "@/lib/property-store";
 import { readBookingRequests, BookingRequest } from "@/lib/booking-service";
-import { readDocumentRequirements, DocumentRequirement } from "@/lib/document-service";
+import type { Reservation } from "@/lib/reservation-service";
+import { readDocumentRequirements, DocumentRequirement, updateDocumentRequirement } from "@/lib/document-service";
 import { readAgencyPersonnel, AgencyPersonnel } from "@/lib/agency-service";
 import { readNotifications, Notification } from "@/lib/notification-service";
 import { DemoUser, getStoredSession } from "@/lib/demo-auth";
-import { AgencyLayout } from "./layout";
+import { AgencyLayout } from "@/components/AgencyLayout";
 
 const STAGE_LABELS: Record<string, string> = {
   AGREEMENT_CONFIRMED: "Agreement Confirmed",
@@ -72,24 +79,27 @@ interface AgencyOverviewProps {
   notifications: Notification[];
   agencyPersonnel: AgencyPersonnel[];
   formatMoney: (value: number) => string;
+  setActiveSection: (key: string) => void;
 }
 
 interface AllTransactionsProps {
   transactions: Transaction[];
-  properties: Property[];
   formatMoney: (value: number) => string;
+  router: ReturnType<typeof useRouter>;
 }
 
 interface TransactionIntakeProps {
   properties: Property[];
   bookingRequests: BookingRequest[];
   formatMoney: (value: number) => string;
+  setActiveSection: (key: string) => void;
 }
 
 interface DocumentManagementProps {
   documentRequirements: DocumentRequirement[];
   properties: Property[];
   formatMoney: (value: number) => string;
+  setActiveSection: (key: string) => void;
 }
 
 interface DocumentReviewProps {
@@ -105,6 +115,7 @@ interface ProcessingQueueProps {
 interface ClientManagementProps {
   transactions: Transaction[];
   formatMoney: (value: number) => string;
+  setActiveSection: (key: string) => void;
 }
 
 interface CompletedTransfersProps {
@@ -125,7 +136,7 @@ interface AgencySettingsProps {
 export default function AgencyPage() {
   const router = useRouter();
   const [session, setSession] = useState<DemoUser | null>(null);
-  const [activeSection] = useState("overview");
+  const [activeSection, setActiveSection] = useState("overview");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [bookingRequests, setBookingRequests] = useState<BookingRequest[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
@@ -211,7 +222,11 @@ export default function AgencyPage() {
   if (loading) {
     return (
       <div className="app-shell">
-        <AgencyLayout session={session}>
+      <AgencyLayout
+        session={session}
+        activeSection={activeSection}
+        setActiveSection={setActiveSection}
+      >
           <div className="container">
             <h1 className="display">Loading Agency Portal…</h1>
           </div>
@@ -222,7 +237,11 @@ export default function AgencyPage() {
 
   return (
     <div className="app-shell">
-      <AgencyLayout session={session}>
+      <AgencyLayout
+        session={session}
+        activeSection={activeSection}
+        setActiveSection={setActiveSection}
+      >
         <div className="agency-content">
           {activeSection === "overview" && (
             <AgencyOverview
@@ -235,13 +254,14 @@ export default function AgencyPage() {
               notifications={notifications}
               agencyPersonnel={agencyPersonnel}
               formatMoney={formatMoney}
+              setActiveSection={setActiveSection}
             />
           )}
           {activeSection === "transactions" && (
             <AllTransactions
               transactions={transactions}
-              properties={properties}
               formatMoney={formatMoney}
+              router={router}
             />
           )}
           {activeSection === "intake" && (
@@ -249,6 +269,7 @@ export default function AgencyPage() {
               properties={properties}
               bookingRequests={bookingRequests}
               formatMoney={formatMoney}
+              setActiveSection={setActiveSection}
             />
           )}
           {activeSection === "documents" && (
@@ -256,6 +277,7 @@ export default function AgencyPage() {
               documentRequirements={documentRequirements}
               properties={properties}
               formatMoney={formatMoney}
+              setActiveSection={setActiveSection}
             />
           )}
           {activeSection === "review" && (
@@ -274,6 +296,7 @@ export default function AgencyPage() {
             <ClientManagement
               transactions={transactions}
               formatMoney={formatMoney}
+              setActiveSection={setActiveSection}
             />
           )}
           {activeSection === "completed" && (
@@ -312,6 +335,7 @@ function AgencyOverview({
   notifications,
   agencyPersonnel,
   formatMoney,
+  setActiveSection,
 }: AgencyOverviewProps) {
   const totalEscrow = activeTransactions.reduce(
     (sum: number, tx: Transaction) => sum + (tx.escrowHeld || 0),
@@ -365,7 +389,7 @@ function AgencyOverview({
           <p className="muted">
             {pendingIntake.length} transaction(s) awaiting agency intake.
           </p>
-          <button className="button button-primary" onClick={() => {}}>
+          <button className="button button-primary" onClick={() => setActiveSection("intake")}>
             View Intake Queue
           </button>
         </div>
@@ -374,7 +398,7 @@ function AgencyOverview({
           <p className="muted">
             {pendingDocs.length} document(s) requiring attention.
           </p>
-          <button className="button button-primary" onClick={() => {}}>
+          <button className="button button-primary" onClick={() => setActiveSection("review")}>
             Review Documents
           </button>
         </div>
@@ -411,7 +435,64 @@ function AgencyOverview({
 
 /* ---------- All Transactions ---------- */
 
-function AllTransactions({ transactions, properties, formatMoney }: AllTransactionsProps) {
+function AllTransactions({ transactions, formatMoney, router }: AllTransactionsProps) {
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ id: string; text: string; error?: boolean } | null>(null);
+
+  const actionFor = (tx: Transaction) => {
+    if (tx.stage === "AGREEMENT_CONFIRMED" || tx.stage === "BOOKING_REQUESTED") {
+      return { label: "Approve transaction", success: "Transaction accepted by the agency." };
+    }
+    if (tx.stage === "AGENCY_INTAKE" || tx.stage === "AGENCY_REVIEW") {
+      return { label: "Record escrow", success: "Reservation fee recorded in escrow." };
+    }
+    if (tx.stage === "PAYMENT_HELD") {
+      return { label: "Prepare transfer documents", success: "Transfer documents are ready for both parties." };
+    }
+    if (tx.stage === "PARTIES_SIGNED") {
+      return { label: "Release escrow", success: "Escrow released to the seller." };
+    }
+    if (tx.stage === "FUNDS_RELEASED") {
+      return { label: "Complete transfer", success: "Transaction marked complete." };
+    }
+    return null;
+  };
+
+  const runStageAction = async (tx: Transaction) => {
+    const action = actionFor(tx);
+    if (!action) return;
+    setBusyId(tx.id);
+    setNotice(null);
+    try {
+      let updated: Transaction | null = null;
+      if (tx.stage === "AGREEMENT_CONFIRMED" || tx.stage === "BOOKING_REQUESTED") {
+        updated = await agencyReview(tx.id, "AGENCY", "APPROVED");
+      } else if (tx.stage === "AGENCY_INTAKE" || tx.stage === "AGENCY_REVIEW") {
+        updated = await holdPayment(tx.id, "AGENCY", "Simulated reservation fee");
+      } else if (tx.stage === "PAYMENT_HELD") {
+        updated = await prepareDocuments(
+          tx.id,
+          "AGENCY",
+          ["Certificate of Title", "Tax Declaration", "Deed of Absolute Sale"],
+        );
+      } else if (tx.stage === "PARTIES_SIGNED") {
+        updated = await releaseFunds(tx.id, "AGENCY");
+      } else if (tx.stage === "FUNDS_RELEASED") {
+        updated = await completeTransaction(tx.id, "AGENCY");
+      }
+      if (!updated) throw new Error("The transaction could not be updated. Refresh and try again.");
+      setNotice({ id: tx.id, text: action.success });
+    } catch (error) {
+      setNotice({
+        id: tx.id,
+        text: error instanceof Error ? error.message : "The transaction could not be updated.",
+        error: true,
+      });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
     <div className="container">
       <div className="agency-page-header">
@@ -465,7 +546,22 @@ function AllTransactions({ transactions, properties, formatMoney }: AllTransacti
                 <td>{formatMoney(tx.salePrice || 0)}</td>
                 <td>{formatMoney(tx.agencyFee || 0)}</td>
                 <td>
-                  <button className="button button-ghost" onClick={() => {}}>
+                  {actionFor(tx) && (
+                    <button
+                      className="button button-primary"
+                      data-transaction-action={tx.stage}
+                      disabled={busyId === tx.id}
+                      onClick={() => runStageAction(tx)}
+                    >
+                      {busyId === tx.id ? "Saving…" : actionFor(tx)!.label}
+                    </button>
+                  )}
+                  {notice?.id === tx.id && (
+                    <p role="status" style={{ color: notice.error ? "#b91c1c" : "#166534", margin: "6px 0" }}>
+                      {notice.text}
+                    </p>
+                  )}
+                  <button className="button button-ghost" onClick={() => router.push(`/marketplace/${tx.propertyId}`)}>
                     Manage
                   </button>
                 </td>
@@ -490,7 +586,49 @@ function AllTransactions({ transactions, properties, formatMoney }: AllTransacti
 
 /* ---------- Transaction Intake ---------- */
 
-function TransactionIntake({ properties, bookingRequests, formatMoney }: TransactionIntakeProps) {
+function TransactionIntake({ properties, bookingRequests, formatMoney, setActiveSection }: TransactionIntakeProps) {
+  const [selectedPropId, setSelectedPropId] = useState<number>(properties[0]?.id || 1);
+  const [buyerEmail, setBuyerEmail] = useState("");
+  const [sellerEmail, setSellerEmail] = useState("");
+  const [agreedPrice, setAgreedPrice] = useState("");
+  const [notes, setNotes] = useState("");
+  const [msg, setMsg] = useState("");
+
+  const handleManualCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const prop = properties.find((p) => p.id === Number(selectedPropId));
+    if (!prop) {
+      setMsg("Please select a property.");
+      return;
+    }
+    if (!buyerEmail.trim() || !buyerEmail.includes("@")) {
+      setMsg("Please enter a valid buyer email address.");
+      return;
+    }
+    try {
+      await createTransactionFromReservation({
+        reservation: {
+          id: `YTR-RES-${Date.now()}`,
+          propertyId: prop.id,
+          buyerId: buyerEmail.trim().toLowerCase(),
+          status: "RESERVED",
+          reservationFee: 25000,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + 48 * 3600 * 1000).toISOString(),
+        },
+        property: prop,
+        buyerName: buyerEmail.split("@")[0],
+        sellerName: sellerEmail.trim() || prop.seller,
+      });
+      setMsg("Transaction created successfully!");
+      setTimeout(() => {
+        setActiveSection("transactions");
+      }, 1000);
+    } catch (err: unknown) {
+      setMsg(err instanceof Error ? err.message : "Failed to create transaction.");
+    }
+  };
   return (
     <div className="container">
       <div className="agency-page-header">
@@ -531,7 +669,24 @@ function TransactionIntake({ properties, bookingRequests, formatMoney }: Transac
                     <td>
                       <button
                         className="button button-primary"
-                        onClick={() => {}}
+                        onClick={() => {
+                          const prop = properties.find((p) => p.id === b.propertyId)!;
+                          createTransactionFromReservation({
+                            reservation: {
+                              id: `YTR-RES-${b.id}`,
+                              propertyId: b.propertyId,
+                              buyerId: b.buyerId,
+                              status: "PENDING_PAYMENT",
+                              reservationFee: 25000,
+                              createdAt: b.createdAt,
+                              updatedAt: b.createdAt,
+                              expiresAt: b.createdAt,
+                            } satisfies Reservation,
+                            property: prop,
+                            buyerName: b.buyerName,
+                          });
+                          setActiveSection("transactions");
+                        }}
                       >
                         Create Transaction
                       </button>
@@ -555,10 +710,20 @@ function TransactionIntake({ properties, bookingRequests, formatMoney }: Transac
           Create a new transaction directly for a property already agreed upon
           by buyer and seller.
         </p>
-        <form className="form-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <label>
-            Property
-            <select className="form-input">
+        {msg && (
+          <div style={{ padding: "10px 14px", marginBottom: 16, borderRadius: 6, background: msg.includes("success") ? "#e8f5e9" : "#ffebee", color: msg.includes("success") ? "#2e7d32" : "#c62828", fontSize: "0.875rem", fontWeight: 500 }}>
+            {msg}
+          </div>
+        )}
+        <form onSubmit={handleManualCreate} className="form-grid" style={{ gridTemplateColumns: "1fr 1fr", gap: "1.25rem" }}>
+          <label style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column", gap: "6px" }}>
+            <span>Property</span>
+            <select
+              className="form-input"
+              style={{ width: "100%", height: "auto", minHeight: "44px", textOverflow: "ellipsis" }}
+              value={selectedPropId}
+              onChange={(e) => setSelectedPropId(Number(e.target.value))}
+            >
               {properties.map((p: Property) => (
                 <option key={p.id} value={p.id}>
                   {p.title} — {p.barangay}, {p.city}
@@ -566,32 +731,48 @@ function TransactionIntake({ properties, bookingRequests, formatMoney }: Transac
               ))}
             </select>
           </label>
-          <label>
-            Buyer Email
+          <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <span>Buyer Email</span>
             <input
               className="form-input"
               type="email"
               placeholder="buyer@example.com"
+              value={buyerEmail}
+              onChange={(e) => setBuyerEmail(e.target.value)}
+              required
             />
           </label>
-          <label>
-            Seller Email
+          <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <span>Seller Email</span>
             <input
               className="form-input"
               type="email"
               placeholder="seller@example.com"
+              value={sellerEmail}
+              onChange={(e) => setSellerEmail(e.target.value)}
             />
           </label>
-          <label>
-            Agreed Sale Price (PHP)
-            <input className="form-input" inputMode="numeric" placeholder="0" />
+          <label style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column", gap: "6px" }}>
+            <span>Agreed Sale Price (PHP)</span>
+            <input
+              className="form-input"
+              inputMode="numeric"
+              placeholder="0"
+              value={agreedPrice}
+              onChange={(e) => setAgreedPrice(e.target.value)}
+            />
           </label>
-          <label style={{ gridColumn: "1 / -1" }}>
-            Notes
-            <textarea className="form-input form-textarea" placeholder="Agency notes for this transaction" />
+          <label style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column", gap: "6px" }}>
+            <span>Notes</span>
+            <textarea
+              className="form-input form-textarea"
+              placeholder="Agency notes for this transaction"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
           </label>
-          <div style={{ gridColumn: "1 / -1", marginTop: 12 }}>
-            <button className="button button-primary" type="button">
+          <div style={{ gridColumn: "1 / -1", marginTop: 8 }}>
+            <button className="button button-primary" type="submit">
               Create Transaction
             </button>
           </div>
@@ -603,7 +784,7 @@ function TransactionIntake({ properties, bookingRequests, formatMoney }: Transac
 
 /* ---------- Document Management ---------- */
 
-function DocumentManagement({ documentRequirements, properties, formatMoney }: DocumentManagementProps) {
+function DocumentManagement({ documentRequirements, properties, formatMoney, setActiveSection }: DocumentManagementProps) {
   return (
     <div className="container">
       <div className="agency-page-header">
@@ -660,7 +841,7 @@ function DocumentManagement({ documentRequirements, properties, formatMoney }: D
                   {doc.submissionDeadline || "—"}
                 </td>
                 <td>
-                  <button className="button button-ghost" onClick={() => {}}>
+                  <button className="button button-ghost" onClick={() => setActiveSection("review")}>
                     View
                   </button>
                 </td>
@@ -690,6 +871,12 @@ function DocumentReview({ documentRequirements, formatMoney }: DocumentReviewPro
     (doc: DocumentRequirement) =>
       doc.status === "SUBMITTED" || doc.status === "UNDER_REVIEW",
   );
+
+  const handleDocDecision = async (docId: string, status: "ACCEPTED" | "REJECTED", remarks?: string) => {
+    await updateDocumentRequirement(docId, { status: status as DocumentRequirement["status"], agencyRemarks: remarks });
+    const docs = await readDocumentRequirements();
+    // Refresh via state is handled by storage event listener; force re-read not needed here
+  };
 
   return (
     <div className="container">
@@ -729,16 +916,16 @@ function DocumentReview({ documentRequirements, formatMoney }: DocumentReviewPro
                     </span>
                   </td>
                   <td>
-                    <div style={{ display: "flex", gap: 6 }}>
+                      <div style={{ display: "flex", gap: 6 }}>
                       <button
                         className="button button-primary"
-                        onClick={() => {}}
+                        onClick={() => handleDocDecision(doc.id, "ACCEPTED", "Document requirements met")}
                       >
                         Accept
                       </button>
                       <button
                         className="button button-danger"
-                        onClick={() => {}}
+                        onClick={() => handleDocDecision(doc.id, "REJECTED", "Document requirements not met")}
                       >
                         Reject
                       </button>
@@ -832,7 +1019,7 @@ function ProcessingQueue({ transactions, formatMoney }: ProcessingQueueProps) {
 
 /* ---------- Client Management ---------- */
 
-function ClientManagement({ transactions, formatMoney }: ClientManagementProps) {
+function ClientManagement({ transactions, formatMoney, setActiveSection }: ClientManagementProps) {
   const buyerClients = transactions.map((tx: Transaction) => ({
     name: tx.buyerName,
     email: tx.buyerId,
@@ -876,7 +1063,7 @@ function ClientManagement({ transactions, formatMoney }: ClientManagementProps) 
                     tx.buyerId === c.email || tx.sellerId === c.email,
                 ).length}</td>
                 <td>
-                  <button className="button button-ghost" onClick={() => {}}>
+                  <button className="button button-ghost" onClick={() => setActiveSection("transactions")}>
                     View
                   </button>
                 </td>

@@ -4,15 +4,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   BadgeCheck,
-  Bookmark,
   MapPin,
   Megaphone,
-  Store,
-  Undo2,
   Users,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
-import { AppNav } from "@/components/AppNav";
+import { AppLayout } from "@/components/AppLayout";
 import { BuyerTransactions } from "@/components/BuyerTransactions";
 import { SellerTransactions } from "@/components/SellerTransactions";
 import { DocumentVault } from "@/components/DocumentVault";
@@ -142,11 +139,10 @@ export default function DashboardPage() {
   if (!loaded) {
     return (
       <div className="app-shell">
-        <AppNav session={session} />
-        <main className="workspace">
+        <AppLayout session={session} pageTitle="My Properties" showSearch={false}>
           <div className="container">
-            <div className="eyebrow">Dashboard</div>
-            <h1 className="display">Loading your dashboard…</h1>
+            <div className="eyebrow">My Properties</div>
+            <h1 className="display">Loading your properties…</h1>
             <div className="dashboard-grid" style={{ marginTop: 24 }}>
               {[0, 1, 2, 3].map((index) => (
                 <article className="asset-card skeleton-card" key={index}>
@@ -169,22 +165,26 @@ export default function DashboardPage() {
               ))}
             </div>
           </div>
-        </main>
+        </AppLayout>
       </div>
     );
   }
 
   return (
     <div className="app-shell">
-      <AppNav session={session} />
-      <main className="workspace">
+      <AppLayout session={session} pageTitle="My Properties" showSearch={false}>
         <div className="container">
-          <div className="eyebrow">Dashboard</div>
-          <h1 className="display">Welcome back, {session?.name || "there"}.</h1>
-          <p className="muted">
-            Everything about your land in one place: what you reserved, what you
-            are selling, and what you have sold.
-          </p>
+          <div className="section-heading">
+            <div>
+              <div className="eyebrow">My Properties</div>
+              <h1>Welcome back, {session?.name || "there"}!</h1>
+              <p className="muted">
+                Everything about your land in one place: what you reserved,
+                what you are selling, and what you have sold.
+              </p>
+            </div>
+          </div>
+
           <div className="stats">
             <div className="stat">
               <span>Land reserved</span>
@@ -198,22 +198,14 @@ export default function DashboardPage() {
               <span>Land sold</span>
               <strong>{sold.length}</strong>
             </div>
-            <div className="stat">
-              <span>Transactions</span>
-              <strong>{transactions.length}</strong>
-            </div>
           </div>
 
-          {/* Land Reserved */}
-          <div className="dashboard-heading" style={{ marginTop: 40 }}>
+          <div className="section-heading" style={{ marginTop: 40 }}>
             <div>
               <div className="eyebrow">Buying</div>
-              <h2 className="display">
-                <Bookmark size={20} style={{ verticalAlign: "-3px" }} /> Land
-                reserved
-              </h2>
+              <h2>Land reserved</h2>
             </div>
-            <Link className="button button-primary" href="/marketplace">
+            <Link href="/marketplace" className="btn btn-primary">
               Discover land
             </Link>
           </div>
@@ -268,15 +260,12 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* Booking Requests (Seller) */}
           {session && bookingRequests.length > 0 && (
             <>
-              <div className="dashboard-heading" style={{ marginTop: 46 }}>
+              <div className="section-heading" style={{ marginTop: 46 }}>
                 <div>
                   <div className="eyebrow">Booking Requests</div>
-                  <h2 className="display">
-                    Pending buyer booking requests
-                  </h2>
+                  <h2>Pending buyer booking requests</h2>
                 </div>
                 <p className="muted">
                   Review and approve or reject booking requests from buyers.
@@ -322,7 +311,7 @@ export default function DashboardPage() {
                         </div>
                         <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
                           <button
-                            className="button button-primary"
+                            className="btn btn-primary btn-sm"
                             onClick={async () => {
                               try {
                                 const updated = await respondToBookingRequest(
@@ -332,7 +321,6 @@ export default function DashboardPage() {
                                   "Approved by seller",
                                 );
                                 if (updated) {
-                                  // Create reservation
                                   const { createReservation } = await import(
                                     "@/lib/reservation-service"
                                   );
@@ -357,25 +345,25 @@ export default function DashboardPage() {
                                       title: "Booking Approved",
                                       description: `The seller approved your booking request for ${property.title}.`,
                                       transactionReference: res.reservation.id,
-                                      actionUrl: `/dashboard`,
+                                      actionUrl: "/dashboard",
                                     });
                                   }
                                   setBookingRequests((prev) =>
                                     prev.filter((b) => b.id !== booking.id),
                                   );
                                   setToast("Booking approved — reservation created.");
-                                  setTimeout(() => setToast(""), 3000);
+                                  window.setTimeout(() => setToast(""), 3000);
                                 }
                               } catch (err: unknown) {
                                 setToast((err as Error).message || "Failed to approve booking.");
-                                setTimeout(() => setToast(""), 3000);
+                                window.setTimeout(() => setToast(""), 3000);
                               }
                             }}
                           >
                             Approve
                           </button>
                           <button
-                            className="button button-danger"
+                            className="btn btn-ghost btn-sm"
                             onClick={async () => {
                               try {
                                 await respondToBookingRequest(
@@ -390,16 +378,16 @@ export default function DashboardPage() {
                                   title: "Booking Rejected",
                                   description: `The seller rejected your booking request for ${property.title}.`,
                                   transactionReference: booking.id,
-                                  actionUrl: `/dashboard`,
+                                  actionUrl: "/dashboard",
                                 });
                                 setBookingRequests((prev) =>
                                   prev.filter((b) => b.id !== booking.id),
                                 );
                                 setToast("Booking rejected.");
-                                setTimeout(() => setToast(""), 3000);
+                                window.setTimeout(() => setToast(""), 3000);
                               } catch (err: unknown) {
                                 setToast((err as Error).message || "Failed to reject booking.");
-                                setTimeout(() => setToast(""), 3000);
+                                window.setTimeout(() => setToast(""), 3000);
                               }
                             }}
                           >
@@ -414,49 +402,45 @@ export default function DashboardPage() {
             </>
           )}
 
-          {/* Cancelled Bookings */}
           {cancelled.length > 0 && (
             <>
-              <div className="dashboard-heading" style={{ marginTop: 46 }}>
+              <div className="section-heading" style={{ marginTop: 46 }}>
                 <div>
                   <div className="eyebrow">Cancelled</div>
-                  <h2 className="display">
-                    <Undo2 size={20} style={{ verticalAlign: "-3px" }} /> Cancelled
-                    bookings
-                  </h2>
+                  <h2>Cancelled bookings</h2>
                 </div>
               </div>
               <div className="dashboard-grid">
                 {cancelled.map((reservation) => {
-                const property = properties.find(
-                  (item) => item.id === reservation.propertyId,
-                );
-                if (!property) return null;
-                return (
-                  <article className="asset-card" key={reservation.id}>
-                    <div
-                      className="asset-image"
-                      style={{
-                        backgroundImage: `url(${property.image})`,
-                        backgroundPosition: property.imagePosition || "center",
-                      }}
-                    />
-                    <div className="property-body">
-                      <span className="badge badge-status" style={{ backgroundColor: "#fdecea", color: "#9a432d" }}>
-                        Cancelled
-                      </span>
-                      <h3>{property.title}</h3>
-                      <p className="property-location">
-                        <MapPin size={14} /> {property.barangay}, {property.city}
-                      </p>
-                      <div className="property-meta">
-                        <strong className="price">
-                          {formatMoney(property.price)}
-                        </strong>
-                      </div>
-                      <small className="muted">
-                        Reservation cancelled — property is available again
-                      </small>
+                  const property = properties.find(
+                    (item) => item.id === reservation.propertyId,
+                  );
+                  if (!property) return null;
+                  return (
+                    <article className="asset-card" key={reservation.id}>
+                      <div
+                        className="asset-image"
+                        style={{
+                          backgroundImage: `url(${property.image})`,
+                          backgroundPosition: property.imagePosition || "center",
+                        }}
+                      />
+                      <div className="property-body">
+                        <span className="badge badge-status" style={{ backgroundColor: "#fdecea", color: "#9a432d" }}>
+                          Cancelled
+                        </span>
+                        <h3>{property.title}</h3>
+                        <p className="property-location">
+                          <MapPin size={14} /> {property.barangay}, {property.city}
+                        </p>
+                        <div className="property-meta">
+                          <strong className="price">
+                            {formatMoney(property.price)}
+                          </strong>
+                        </div>
+                        <small className="muted">
+                          Reservation cancelled — property is available again
+                        </small>
                       </div>
                     </article>
                   );
@@ -464,14 +448,13 @@ export default function DashboardPage() {
               </div>
             </>
           )}
-          <div className="dashboard-heading" style={{ marginTop: 46 }}>
+
+          <div className="section-heading" style={{ marginTop: 46 }}>
             <div>
               <div className="eyebrow">Selling</div>
-              <h2 className="display">
-                <Store size={20} style={{ verticalAlign: "-3px" }} /> Land on sale
-              </h2>
+              <h2>Land on sale</h2>
             </div>
-            <Link className="button button-ghost" href="/?view=seller">
+            <Link href="/?view=seller" className="btn btn-ghost">
               Manage listings
             </Link>
           </div>
@@ -510,14 +493,14 @@ export default function DashboardPage() {
                     </div>
                     {isPromotionActive(listing) ? (
                       <div className="promo-box">
-                        <span className="badge badge-promoted">
+                        <span className="badge badge-gray">
                           <Megaphone size={12} /> Promoted
                         </span>
                         <small className="muted">
                           Runs until {promotionEndLabel(listing.promotionUntil)}
                         </small>
                         <button
-                          className="button button-ghost"
+                          className="btn btn-ghost btn-sm"
                           onClick={async () => {
                             await endPromotion(listing.id);
                           }}
@@ -528,7 +511,7 @@ export default function DashboardPage() {
                     ) : (
                       <div className="promo-box">
                         <button
-                          className="button button-primary"
+                          className="btn btn-primary btn-sm"
                           disabled={!isActiveListing(listing)}
                           onClick={() => {
                             setPromoteId(listing.id);
@@ -544,21 +527,17 @@ export default function DashboardPage() {
                             </small>
                           )}
                         </div>
-                    )}
+                      )}
                   </div>
                 </article>
               ))}
             </div>
           )}
 
-          {/* Land Sold */}
-          <div className="dashboard-heading" style={{ marginTop: 46 }}>
+          <div className="section-heading" style={{ marginTop: 46 }}>
             <div>
               <div className="eyebrow">Selling</div>
-              <h2 className="display">
-                <BadgeCheck size={20} style={{ verticalAlign: "-3px" }} /> Land
-                sold
-              </h2>
+              <h2>Land sold</h2>
             </div>
             <p className="muted" style={{ maxWidth: 340 }}>
               Land buyers have booked, and the current step of each transaction.
@@ -620,7 +599,7 @@ export default function DashboardPage() {
               <label className="form-label">
                 Promotion length
                 <select
-                  className="form-input"
+                  className="input"
                   value={promoteDays}
                   onChange={(event) =>
                     setPromoteDays(Number(event.target.value))
@@ -645,13 +624,13 @@ export default function DashboardPage() {
               </div>
               <div className="modal-foot">
                 <button
-                  className="button button-ghost"
+                  className="btn btn-ghost"
                   onClick={() => setPromoteId(null)}
                 >
                   Cancel
                 </button>
                 <button
-                  className="button button-primary"
+                  className="btn btn-primary"
                   onClick={async () => {
                     await promoteLand(promoteListing.id, promoOption.days);
                     setPromoteId(null);
@@ -676,7 +655,7 @@ export default function DashboardPage() {
             </p>
           </div>
         </div>
-      </main>
+      </AppLayout>
       {toast && <div className="toast">{toast}</div>}
     </div>
   );

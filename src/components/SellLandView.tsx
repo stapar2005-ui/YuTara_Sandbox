@@ -132,7 +132,7 @@ export function SellLandView({
     : [];
 
   return (
-    <main className="workspace">
+    <div className="workspace">
       <div className="container">
         <button className="back-button sell-back" onClick={onBack}>
           <ArrowLeft size={16} /> Back to marketplace
@@ -632,7 +632,7 @@ export function SellLandView({
           </>
         )}
       </div>
-    </main>
+    </div>
   );
 }
 

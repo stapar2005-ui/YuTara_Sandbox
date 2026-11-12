@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isDemoMode } from "./runtime-config";
 
 /**
  * Storage adapter interface.
@@ -78,10 +79,12 @@ export class LocalStorageAdapter implements StorageAdapter {
  */
 export class SupabaseAdapter implements StorageAdapter {
   private readonly local = new LocalStorageAdapter();
+  private readonly useLocal = isDemoMode;
 
   constructor(private supabaseClient: SupabaseClient, private table: string) {}
 
   async getItem<T>(key: string): Promise<T | null> {
+    if (this.useLocal) return this.local.getItem<T>(key);
     const { data, error } = await this.supabaseClient
       .from(this.table)
       .select("value")
@@ -92,6 +95,7 @@ export class SupabaseAdapter implements StorageAdapter {
   }
 
   async setItem<T>(key: string, value: T): Promise<boolean> {
+    if (this.useLocal) return this.local.setItem(key, value);
     const { error } = await this.supabaseClient.from(this.table).upsert({
       id: key,
       value,
@@ -101,6 +105,7 @@ export class SupabaseAdapter implements StorageAdapter {
   }
 
   async removeItem(key: string): Promise<boolean> {
+    if (this.useLocal) return this.local.removeItem(key);
     const { error } = await this.supabaseClient
       .from(this.table)
       .delete()
@@ -109,6 +114,7 @@ export class SupabaseAdapter implements StorageAdapter {
   }
 
   async clear(): Promise<void> {
+    if (this.useLocal) return this.local.clear();
     const { error } = await this.supabaseClient
       .from(this.table)
       .delete()
@@ -117,6 +123,7 @@ export class SupabaseAdapter implements StorageAdapter {
   }
 
   onChange(callback: (key: string) => void): () => void {
+    if (this.useLocal) return this.local.onChange(callback);
     const channel = this.supabaseClient
       .channel(this.table)
       .on(
@@ -145,6 +152,9 @@ export class SupabaseAdapter implements StorageAdapter {
  * Table: profiles(id text primary key, value jsonb, updated_at timestamptz)
  */
 export class ProfileAdapter implements StorageAdapter {
+  private readonly local = new LocalStorageAdapter();
+  private readonly useLocal = isDemoMode;
+
   constructor(
     private supabaseClient: SupabaseClient,
     private table: string,
@@ -156,6 +166,7 @@ export class ProfileAdapter implements StorageAdapter {
   }
 
   async getItem<T>(_key: string): Promise<T | null> {
+    if (this.useLocal) return this.local.getItem<T>(this.key);
     const { data, error } = await this.supabaseClient
       .from(this.table)
       .select("value")
@@ -166,6 +177,7 @@ export class ProfileAdapter implements StorageAdapter {
   }
 
   async setItem<T>(key: string, value: T): Promise<boolean> {
+    if (this.useLocal) return this.local.setItem(this.key, value);
     const { error } = await this.supabaseClient.from(this.table).upsert({
       id: this.key,
       value,
@@ -175,6 +187,7 @@ export class ProfileAdapter implements StorageAdapter {
   }
 
   async removeItem(_key: string): Promise<boolean> {
+    if (this.useLocal) return this.local.removeItem(this.key);
     const { error } = await this.supabaseClient
       .from(this.table)
       .delete()
@@ -183,10 +196,12 @@ export class ProfileAdapter implements StorageAdapter {
   }
 
   async clear(): Promise<void> {
+    if (this.useLocal) return this.local.clear();
     await this.supabaseClient.from(this.table).delete().eq("id", this.key);
   }
 
   onChange(callback: (key: string) => void): () => void {
+    if (this.useLocal) return this.local.onChange(callback);
     const channel = this.supabaseClient
       .channel(`${this.table}:${this.key}`)
       .on(

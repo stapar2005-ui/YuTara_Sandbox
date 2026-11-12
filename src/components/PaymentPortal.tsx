@@ -169,6 +169,17 @@ export function PaymentPortal({
         setError("Payment could not be completed. Please start a new reservation.");
         return;
       }
+      try {
+        const { createTransactionFromReservation } = await import("@/lib/transactions");
+        await createTransactionFromReservation({
+          reservation: updated,
+          property,
+          buyerName: buyerName || "Buyer",
+          sellerName: property.seller,
+        });
+      } catch (err) {
+        console.error("Failed to sync transaction:", err);
+      }
       setReceipt(updated);
       setStage("done");
       onConfirmed?.(updated);

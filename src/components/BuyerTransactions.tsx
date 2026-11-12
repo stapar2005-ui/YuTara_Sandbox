@@ -150,18 +150,18 @@ export function BuyerTransactions({ email }: { email: string }) {
                 </span>
               )}
 
-              {tx.stage === "DOCUMENTS_PREPARED" && !signedByBuyer && (
+              {(tx.stage === "DOCUMENT_COLLECTION" || tx.stage === "DOCUMENTS_PREPARED") && !signedByBuyer && (
                 <button
                   className="button button-primary"
                   onClick={async () => {
-                    await recordSigning(tx.id, "AGENCY", "BUYER");
+                    await recordSigning(tx.id, "BUYER", "BUYER");
                   }}
                 >
                   <Handshake size={15} /> Sign transfer documents
                 </button>
               )}
 
-              {tx.stage === "DOCUMENTS_PREPARED" && signedByBuyer && !bothSigned && (
+              {(tx.stage === "DOCUMENT_COLLECTION" || tx.stage === "DOCUMENTS_PREPARED") && signedByBuyer && !bothSigned && (
                 <span className="tx-note">
                   You have signed. Awaiting the seller&apos;s signature.
                 </span>

@@ -3,6 +3,15 @@
 import { ArrowLeft, Heart, MapPin, MessageCircle, Users } from "lucide-react";
 import { getListingStatus, money, Property } from "@/lib/marketplace";
 
+const STATUS_CONFIG: Record<string, { label: string; variant: "green" | "amber" | "red" | "gray" }> = {
+  OPEN_FOR_OFFERS: { label: "Open for Offers", variant: "green" },
+  BOOKING_REQUESTED: { label: "Booking Requested", variant: "amber" },
+  RESERVED: { label: "Reserved", variant: "amber" },
+  CLOSED: { label: "Closed", variant: "gray" },
+  SOLD: { label: "Sold", variant: "red" },
+  TERMINATED: { label: "Terminated", variant: "red" },
+};
+
 export function PropertyDetailView({
   property,
   saved,
@@ -21,25 +30,17 @@ export function PropertyDetailView({
   onRequestBooking?: () => void;
 }) {
   const status = getListingStatus(property);
+  const config = STATUS_CONFIG[status] || STATUS_CONFIG.OPEN_FOR_OFFERS;
   const isBookable = status === "OPEN_FOR_OFFERS";
 
-  const STATUS_COLOR: Record<string, string> = {
-    OPEN_FOR_OFFERS: "#166534",
-    BOOKING_REQUESTED: "#d97706",
-    RESERVED: "#d97706",
-    CLOSED: "#b91c1c",
-    SOLD: "#b91c1c",
-    TERMINATED: "#b91c1c",
-  };
-
   return (
-    <main className="detail-view">
+    <div className="detail-view page">
       <div className="container">
         <button className="back-button" onClick={onBack}>
           <ArrowLeft size={16} /> Back to marketplace
         </button>
         <div className="detail-grid">
-          <div>
+          <div className="detail-gallery">
             <div
               className="detail-image"
               style={{
@@ -47,7 +48,7 @@ export function PropertyDetailView({
                 backgroundPosition: property.imagePosition || "center",
               }}
             />
-            <div className="map-reference">
+            <div className="detail-location">
               <div className="eyebrow">Location reference</div>
               <strong>{property.barangay}, {property.city}</strong>
               <p>
@@ -61,21 +62,15 @@ export function PropertyDetailView({
             </div>
           </div>
           <div className="detail-copy">
-            <div className="badge-row" style={{ position: "static" }}>
-              <span
-                className="badge badge-status"
-                style={{
-                  backgroundColor: STATUS_COLOR[status] || "#166534",
-                  color: "#ffffff",
-                }}
-              >
-                {status.replaceAll("_", " ")}
+            <div className="badge-row">
+              <span className={`badge badge-${config.variant}`}>
+                {config.label}
               </span>
               {property.promoted && (
-                <span className="badge badge-promoted">Promoted</span>
+                <span className="badge badge-gray">Promoted</span>
               )}
             </div>
-            <h1 className="display">{property.title}</h1>
+            <h1 className="detail-title">{property.title}</h1>
             <div className="property-location">
               <MapPin size={15} /> {property.barangay}, {property.city}
             </div>
@@ -83,7 +78,10 @@ export function PropertyDetailView({
               {property.province} · {property.generalAddress}
             </div>
             <div className="detail-price">{money(property.price)}</div>
-            <div className="muted">Listed by {property.seller}</div>
+            <div className="muted" style={{ marginTop: 4 }}>
+              Listed by {property.seller}
+            </div>
+
             <div className="detail-specs">
               <div className="spec">
                 <span>Land area</span>
@@ -95,24 +93,26 @@ export function PropertyDetailView({
               </div>
               <div className="spec">
                 <span>Listing status</span>
-                <strong>{status.replaceAll("_", " ")}</strong>
+                <strong>{config.label}</strong>
               </div>
             </div>
+
             <p>{property.description}</p>
-            <div style={{ display: "flex", gap: 9, marginTop: 24 }}>
+
+            <div style={{ display: "flex", gap: 9, marginTop: 24, flexWrap: "wrap" }}>
               {owned ? (
                 <p className="status-message">
                   This is your listing. Manage it from your seller workspace.
                 </p>
-              ) : isBookable ? (
+              ) : isBookable && onRequestBooking ? (
                 <>
                   <button
-                    className="button button-primary"
+                    className="btn btn-primary"
                     onClick={onRequestBooking}
                   >
                     Request Booking
                   </button>
-                  <button className="button button-ghost" onClick={onContact}>
+                  <button className="btn btn-ghost" onClick={onContact}>
                     <MessageCircle size={16} /> Contact Seller
                   </button>
                 </>
@@ -129,12 +129,13 @@ export function PropertyDetailView({
                           : "This listing has been terminated and is no longer available."}
                 </p>
               )}
-              <button className="button button-ghost" onClick={onSave}>
+              <button className="btn btn-ghost" onClick={onSave}>
                 <Heart size={16} fill={saved ? "#d79c43" : "none"} />{" "}
                 {saved ? "Saved" : "Save"}
               </button>
             </div>
-            <div className="verification-box" style={{ borderColor: "#d79c43" }}>
+
+            <div className="verification-box">
               <h3>
                 <Users
                   size={18}
@@ -171,6 +172,6 @@ export function PropertyDetailView({
       >
         <MessageCircle size={20} />
       </button>
-    </main>
+    </div>
   );
 }

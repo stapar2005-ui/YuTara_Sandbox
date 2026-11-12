@@ -60,10 +60,15 @@ export type PendingUser = {
   password: string;
   id1: string; // filename of first valid ID
   id2?: string; // filename of second valid ID (optional)
+  id1Url?: string;
+  id2Url?: string;
+  faceScanUrl?: string;
+  mobile?: string;
   status: "PENDING" | "APPROVED" | "DENIED";
   createdAt: string;
   reviewedAt?: string;
   reviewedBy?: string;
+  denialReason?: string;
 };
 
 export const PENDING_USERS_KEY = "yutara-pending-users";
@@ -182,6 +187,7 @@ export function createPendingUser(input: {
   password: string;
   id1: string;
   id2?: string;
+  mobile?: string;
 }): PendingUser {
   const user: PendingUser = {
     id: `PEND-${Date.now()}`,
@@ -190,6 +196,7 @@ export function createPendingUser(input: {
     password: input.password,
     id1: input.id1,
     id2: input.id2,
+    mobile: input.mobile,
     status: "PENDING",
     createdAt: new Date().toISOString(),
   };
@@ -218,6 +225,7 @@ export function approvePendingUser(
 export function denyPendingUser(
   id: string,
   reviewedBy: string,
+  reason?: string,
 ): PendingUser | null {
   const users = readPendingUsers();
   const index = users.findIndex((u) => u.id === id);
@@ -227,6 +235,7 @@ export function denyPendingUser(
     status: "DENIED",
     reviewedAt: new Date().toISOString(),
     reviewedBy,
+    denialReason: reason,
   };
   writePendingUsers(users);
   return users[index];
@@ -237,6 +246,8 @@ export function isEmailRegisteredOrPending(email: string): boolean {
   if (DEMO_ACCOUNTS[lower]) return true;
   const pending = readPendingUsers();
   return pending.some(
-    (u) => u.email === lower && u.status === "PENDING",
+    (u) =>
+      u.email === lower &&
+      (u.status === "PENDING" || u.status === "APPROVED"),
   );
 }

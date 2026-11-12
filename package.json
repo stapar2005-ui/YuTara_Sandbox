@@ -4,10 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --env-file=.env.local --experimental-transform-types --import ./tests/setup.mjs --loader ./tests/custom-loader.mjs --test tests/e2e-system-test.ts"
+    "test": "node --env-file=.env.local --experimental-transform-types --import ./tests/setup.mjs --loader ./tests/custom-loader.mjs --test tests/e2e-system-test.ts --test tests/ui-design-test.ts --test tests/visual-regression-test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.0",
@@ -17,6 +17,7 @@
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

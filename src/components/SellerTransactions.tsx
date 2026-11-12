@@ -163,7 +163,7 @@ export function SellerTransactions({ email }: { email: string }) {
                 </span>
               )}
 
-              {tx.stage === "DOCUMENTS_PREPARED" && !signedBySeller && (
+              {(tx.stage === "DOCUMENT_COLLECTION" || tx.stage === "DOCUMENTS_PREPARED") && !signedBySeller && (
                 <button
                   className="button button-primary"
                   onClick={async () => {
@@ -174,7 +174,7 @@ export function SellerTransactions({ email }: { email: string }) {
                 </button>
               )}
 
-              {tx.stage === "DOCUMENTS_PREPARED" && signedBySeller && !bothSigned && (
+              {(tx.stage === "DOCUMENT_COLLECTION" || tx.stage === "DOCUMENTS_PREPARED") && signedBySeller && !bothSigned && (
                 <span className="tx-note">
                   You have signed. Awaiting the buyer&apos;s signature.
                 </span>

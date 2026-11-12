@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Check, Heart, MapPin, MessageCircle, Users } from "lucide-react";
-import { AppNav } from "@/components/AppNav";
+import { ArrowLeft, CalendarDays, Check, Heart, MapPin, MessageCircle, Users } from "lucide-react";
+import { MarketplaceRouteLayout } from "@/components/MarketplaceRouteLayout";
 import { Modal } from "@/components/Modal";
 import {
   formatMoney,
@@ -15,6 +15,7 @@ import {
 import { readProperties } from "@/lib/property-store";
 import { DemoUser, getStoredSession } from "@/lib/demo-auth";
 import { addInquiry } from "@/lib/inquiries";
+import { createBookingRequest } from "@/lib/booking-service";
 
 function readSaved(): number[] {
   if (typeof window === "undefined") return [];
@@ -38,31 +39,38 @@ export default function PropertyRoute() {
     "Hello, I am interested in this property and would like to know more about its availability.",
   );
   const [sent, setSent] = useState(false);
+  const [bookingPending, setBookingPending] = useState(false);
+  const [bookingMessage, setBookingMessage] = useState("");
 
   useEffect(() => {
     const timer = window.setTimeout(async () => {
+      const currentSession = getStoredSession();
+      setSession(currentSession);
+      if (currentSession?.role === "ADMIN") {
+        router.replace("/?view=admin#land-listings");
+        return;
+      }
       const props = await readProperties();
       const found = props.find((item) => item.id === Number(params.id));
       setProperty(found);
-      setSession(getStoredSession());
+      setSession(currentSession);
       setSaved(found ? readSaved().includes(found.id) : false);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [params.id]);
+  }, [params.id, router]);
 
   if (!property) {
     return (
-      <div className="app-shell">
-        <AppNav session={session} />
-        <main className="workspace">
+      <MarketplaceRouteLayout session={session} pageTitle="Marketplace">
+        <div className="workspace">
           <div className="container">
             <h1>Property not found</h1>
             <Link className="button button-ghost" href="/marketplace/map">
               Back to marketplace
             </Link>
           </div>
-        </main>
-      </div>
+        </div>
+      </MarketplaceRouteLayout>
     );
   }
 
@@ -98,13 +106,41 @@ export default function PropertyRoute() {
     setSent(true);
   }
 
+  async function requestSiteVisit() {
+    if (!property) return;
+    if (!session) {
+      router.push(`/login?next=${encodeURIComponent(`/marketplace/${property.id}`)}`);
+      return;
+    }
+    if (owned || bookingPending) return;
+
+    setBookingPending(true);
+    setBookingMessage("");
+    try {
+      await createBookingRequest({
+        propertyId: property.id,
+        propertyTitle: property.title,
+        buyerId: session.email,
+        buyerName: session.name,
+        buyerEmail: session.email,
+        sellerId: property.sellerEmail || "seller@yutara.com",
+        sellerName: property.seller,
+        message: "I would like to arrange a site visit for this property.",
+      });
+      setBookingMessage("Site visit request sent. You can track it in Bookings.");
+    } catch (error) {
+      setBookingMessage(error instanceof Error ? error.message : "Unable to send the site visit request.");
+    } finally {
+      setBookingPending(false);
+    }
+  }
+
   return (
-    <div className="app-shell">
-      <AppNav session={session} />
-      <main className="detail-view">
+    <MarketplaceRouteLayout session={session} pageTitle="Property details">
+      <div className="detail-view">
         <div className="container">
-          <button className="back-button" onClick={() => router.back()}>
-            <ArrowLeft size={16} /> Back
+          <button className="back-button" onClick={() => router.push("/marketplace")}>
+            <ArrowLeft size={16} /> Back to marketplace
           </button>
           <div className="detail-grid">
             <div>
@@ -175,6 +211,14 @@ export default function PropertyRoute() {
                       </Link>
                       <button
                         className="button button-ghost"
+                        onClick={requestSiteVisit}
+                        disabled={bookingPending}
+                      >
+                        <CalendarDays size={16} />
+                        {bookingPending ? "Sending request…" : "Request site visit"}
+                      </button>
+                      <button
+                        className="button button-ghost"
                         onClick={() => setInquiryOpen(true)}
                       >
                         <MessageCircle size={16} /> Contact seller
@@ -190,6 +234,11 @@ export default function PropertyRoute() {
               {sent && (
                 <p className="status-message">
                   Your inquiry was sent to the seller.
+                </p>
+              )}
+              {bookingMessage && (
+                <p className="status-message" role="status">
+                  {bookingMessage}
                 </p>
               )}
               <div className="verification-box">
@@ -222,7 +271,7 @@ export default function PropertyRoute() {
             </div>
           </div>
         </div>
-      </main>
+      </div>
       {inquiryOpen && (
         <Modal title="Contact seller" onClose={() => setInquiryOpen(false)}>
           <p className="muted">
@@ -249,6 +298,6 @@ export default function PropertyRoute() {
           </div>
         </Modal>
       )}
-    </div>
+    </MarketplaceRouteLayout>
   );
 }

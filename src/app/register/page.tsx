@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, FileCheck2, ScanFace } from "lucide-react";
 import Link from "next/link";
 import { YuTaraLogo } from "@/components/YuTaraLogo";
@@ -15,6 +15,8 @@ export default function RegisterPage() {
   const [consent, setConsent] = useState(false);
   const [error, setError] = useState("");
   const [uploads, setUploads] = useState<Record<string, string>>({});
+  const fileInputRef1 = useRef<HTMLInputElement>(null);
+  const fileInputRef2 = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<{
     fullName: string;
     mobile: string;
@@ -136,6 +138,7 @@ export default function RegisterPage() {
         password: form.password,
         id1: uploads["id1"],
         id2: uploads["id2"] || undefined,
+        mobile: form.mobile.trim(),
       });
       setSubmitting(false);
       setSubmitted(true);
@@ -195,14 +198,14 @@ export default function RegisterPage() {
           ) : (
             <form onSubmit={submit} className="registration-form">
               {error && (
-                <div
-                  className="verification-box"
-                  style={{
-                    background: "var(--danger-bg, #fdecea)",
-                    color: "var(--danger-fg, #b3261e)",
-                    border: "1px solid var(--danger-border, #e57373)",
-                  }}
-                >
+              <div
+                className="verification-box"
+                style={{
+                  background: "#fdecea",
+                  color: "#b3261e",
+                  border: "1px solid #e57373",
+                }}
+              >
                   {error}
                 </div>
               )}
@@ -342,60 +345,66 @@ export default function RegisterPage() {
                       Max file size: 5MB. Accepted formats: PDF, JPG, JPEG, PNG.
                     </p>
                   </div>
-                  {["Valid ID #1", "Valid ID #2"].map((label) => (
-                    <div className="document-card" key={label}>
-                      {(() => {
-                        const uploadKey =
-                          label === "Valid ID #1" ? "id1" : "id2";
-                        return (
-                          <>
-                            <div>
-                              <strong>{label}</strong>
-                              <p>
-                                {label === "Valid ID #1"
-                                  ? "Required for registration"
-                                  : "Optional — speeds up approval"}
-                              </p>
-                            </div>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <input
-                                type="file"
-                                accept=".pdf,.jpg,.jpeg,.png"
-                                className="form-input"
-                                onChange={(event) => handleFileChange(label, event)}
-                              />
-                              {uploads[uploadKey] ? (
-                                <>
-                                  <FileCheck2 size={14} style={{ verticalAlign: "-2px", marginRight: 6 }} />
-                                  <strong style={{ color: "#d79c43" }}>{uploads[uploadKey]}</strong>
-                                </>
-                              ) : (
-                                label === "Valid ID #1"
-                                  ? <button className="button button-primary" type="button">Upload ID #1</button>
-                                  : <button className="button button-gold" type="button">Upload ID #2</button>
-                                )}
-                              {uploads[uploadKey] && (
-                                <button
-                                  className="upload-button upload-button-ghost"
-                                  type="button"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    setUploads((current) => {
-                                      const next = { ...current };
-                                      delete next[uploadKey];
-                                      return next;
-                                    });
-                                  }}
-                                >
-                                  Remove
-                                </button>
-                              )}
-                            </div>
-                          </>
-                        );
-                      })()}
-                    </div>
-                  ))}
+                  {[
+                    { label: "Valid ID #1", uploadKey: "id1" as const, ref: fileInputRef1 },
+                    { label: "Valid ID #2", uploadKey: "id2" as const, ref: fileInputRef2 },
+                  ].map(({ label, uploadKey, ref }) => {
+                    const handleUploadClick = () => {
+                      ref.current?.click();
+                    };
+                    return (
+                      <div className="document-card" key={label}>
+                        <div>
+                          <strong>{label}</strong>
+                          <p>
+                            {label === "Valid ID #1"
+                              ? "Required for registration"
+                              : "Optional — speeds up approval"}
+                          </p>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <input
+                            ref={ref}
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            className="form-input"
+                            onChange={(event) => handleFileChange(label, event)}
+                            style={{ display: "none" }}
+                          />
+                          {uploads[uploadKey] ? (
+                            <>
+                              <FileCheck2 size={14} style={{ verticalAlign: "-2px", marginRight: 6 }} />
+                              <strong style={{ color: "#d79c43" }}>{uploads[uploadKey]}</strong>
+                            </>
+                          ) : (
+                            <button
+                              className="button button-primary"
+                              type="button"
+                              onClick={handleUploadClick}
+                            >
+                              Upload {label === "Valid ID #1" ? "ID #1" : "ID #2"}
+                            </button>
+                          )}
+                          {uploads[uploadKey] && (
+                            <button
+                              className="upload-button upload-button-ghost"
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setUploads((current) => {
+                                  const next = { ...current };
+                                  delete next[uploadKey];
+                                  return next;
+                                });
+                              }}
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                   {idUploadCount === 0 && (
                     <p className="muted" style={{ marginTop: 10 }}>
                       Please upload at least one valid ID to continue.
