@@ -2872,6 +2872,7 @@ select.input {
 }
 .market-promoted-section {
   margin-bottom: 1.5rem;
+  padding-top: 1rem;
 }
 
 /* Responsive marketplace */
@@ -3601,10 +3602,14 @@ select.input {
   color: white;
 }
 .login-visual-copy .brand {
-  position: absolute;
-  top: 48px;
-  left: clamp(28px, 8vw, 110px);
+  position: static;
   color: white;
+  margin-top: 0;
+  margin-bottom: 18px;
+}
+.login-visual-copy .brand .brand-logo,
+.login-visual-copy .brand .brand-logo-large {
+  filter: drop-shadow(0 2px 10px rgba(0, 0, 0, 0.55));
 }
 .login-visual-copy .eyebrow {
   color: #a8d5ba;
